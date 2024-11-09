@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Ecommerce GIS Map{% endblock %}
+
+{% block extra_head %}
+    <style>
+      body {
+        margin: 0;
+      }
+      #map {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+
+<!-- Esri-Leaflet JavaScript -->
+{% endblock %}
+
+{% block content %}
+<div id="map" style="height: 800px;"></div>
+
+    
+
+<!--    <script type="text/javascript">-->
+<!--      var map = L.map('map').setView([0, 0], 2);-->
+
+<!--      var geocoder = L.Control.Geocoder.nominatim();-->
+<!--      if (typeof URLSearchParams !== 'undefined' && location.search) {-->
+<!--        // parse /?geocoder=nominatim from URL-->
+<!--        var params = new URLSearchParams(location.search);-->
+<!--        var geocoderString = params.get('geocoder');-->
+<!--        if (geocoderString && L.Control.Geocoder[geocoderString]) {-->
+<!--          console.log('Using geocoder', geocoderString);-->
+<!--          geocoder = L.Control.Geocoder[geocoderString]();-->
+<!--        } else if (geocoderString) {-->
+<!--          console.warn('Unsupported geocoder', geocoderString);-->
+<!--        }-->
+<!--      }-->
+
+<!--      var control = L.Control.geocoder({-->
+<!--        query: 'Moon',-->
+<!--        placeholder: 'Search here...',-->
+<!--        geocoder: geocoder-->
+<!--      }).addTo(map);-->
+<!--      var marker;-->
+
+<!--      setTimeout(function() {-->
+<!--        control.setQuery('Earth');-->
+<!--      }, 12000);-->
+
+<!--      L.tileLayer('https://{s}.tile.osm.org/{z}/{x}/{y}.png', {-->
+<!--        attribution: '&copy; <a href="https://osm.org/copyright">OpenStreetMap</a> contributors'-->
+<!--      }).addTo(map);-->
+
+<!--      map.on('click', function(e) {-->
+<!--        geocoder.reverse(e.latlng, map.options.crs.scale(map.getZoom()), function(results) {-->
+<!--          var r = results[0];-->
+<!--          if (r) {-->
+<!--            if (marker) {-->
+<!--              marker-->
+<!--                .setLatLng(r.center)-->
+<!--                .setPopupContent(r.html || r.name)-->
+<!--                .openPopup();-->
+<!--            } else {-->
+<!--              marker = L.marker(r.center)-->
+<!--                .bindPopup(r.name)-->
+<!--                .addTo(map)-->
+<!--                .openPopup();-->
+<!--            }-->
+<!--          }-->
+<!--        });-->
+<!--      });-->
+<!--    </script>-->
+
+
+    <script>
+
+        document.addEventListener('DOMContentLoaded', function() {
+        console.log("Initializing map...");
+
+        // Initialize the map
+        var map = L.map('map').setView([51.505, -0.09], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+        // Add the geocoder control for OpenStreetMap
+        L.Control.geocoder({
+        defaultMarkGeocode: false
+      })
+        .on('markgeocode', function(e) {
+        var bbox = e.geocode.bbox;
+        var poly = L.polygon([
+        bbox.getSouthEast(),
+        bbox.getNorthEast(),
+        bbox.getNorthWest(),
+        bbox.getSouthWest()
+        ]).addTo(map);
+        map.fitBounds(poly.getBounds());
+      })
+        .addTo(map);
+
+        // Add leaflet hash
+        new L.Hash(map);
+        });
+    </script>
+
+
+
+{% endblock content %}

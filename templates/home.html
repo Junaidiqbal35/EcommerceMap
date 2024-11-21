@@ -21,7 +21,7 @@
 {% block content %}
 <div id="map" style="height: 800px;"></div>
 
-    
+
 
 <!--    <script type="text/javascript">-->
 <!--      var map = L.map('map').setView([0, 0], 2);-->
@@ -111,3 +111,80 @@
 
 
 {% endblock content %}
+
+
+{##}
+{#{% extends "base.html" %}#}
+{#{% load static %}#}
+{##}
+{#{% block title %}GIS Map{% endblock %}#}
+{##}
+{#{% block content %}#}
+{#<div id="map" style="height: 800px;"></div>#}
+{#<button id="download-btn" class="btn btn-primary mt-3">Download DXF</button>#}
+{#{% endblock %}#}
+{##}
+{#{% block extrascript %}#}
+{#<script>#}
+{#document.addEventListener("DOMContentLoaded", function () {#}
+{#    var map = L.map("map").setView([-25.2744, 133.7751], 5); // Australia#}
+{#    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {#}
+{#        maxZoom: 19,#}
+{#        attribution: '© OpenStreetMap contributors'#}
+{#    }).addTo(map);#}
+{##}
+{#    var hash = new L.Hash(map); // Leaflet-Hash for URL hash navigation#}
+{#    var geocoder = L.Control.geocoder().addTo(map); // Geocoder control#}
+{##}
+{#    // Load layers dynamically based on map bounds#}
+{#    function loadServerLayers() {#}
+{#        var bounds = map.getBounds().toBBoxString();#}
+{#        $.ajax({#}
+{#            url: "{% url 'get_layers' %}",#}
+{#            data: {#}
+{#            bbox: bounds#}
+{#            },#}
+{#    success: function (data) {#}
+{#        console.log("Received layer data:", data); #}
+{#        data.forEach(function (layer) {#}
+{#            var layerUrl = layer.server.url + layer.number;#}
+{#            console.log("Layer URL:", layerUrl); #}
+{##}
+{#            var esriLayer = L.esri.featureLayer({#}
+{#                url: layerUrl,#}
+{#                style: layerStyle,#}
+{#                pointToLayer: function (geojson, latlng) {#}
+{#                    return L.circleMarker(latlng, {#}
+{#                        radius: 6,#}
+{#                        fillColor: "#ff7800",#}
+{#                        color: "#000",#}
+{#                        weight: 1,#}
+{#                        opacity: 1,#}
+{#                        fillOpacity: 0.8#}
+{#                    });#}
+{#                }#}
+{#            });#}
+{##}
+{#            esriLayer.on("error", function (error) {#}
+{#                console.error("Error loading Esri Feature Layer:", error);#}
+{#            });#}
+{##}
+{#            esriLayer.addTo(map);#}
+{#        });#}
+{#    },#}
+{#    error: function (error) {#}
+{#        console.error("Error loading layers:", error);#}
+{#    }#}
+{#});#}
+{##}
+{##}
+{#    }#}
+{##}
+{#    // Load layers when the map view changes#}
+{#    map.on("moveend", loadServerLayers);#}
+{##}
+{#    // Initial load#}
+{#    loadServerLayers();#}
+{#})#}
+{#    </script>#}
+{#{% endblock extrascript %}#}

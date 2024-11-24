@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load static %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+
+{% endblock head %}
+
+{% block content %}
+<div class="row login">
+       
+    <div class="col-7 mx-auto login2">
+        <div class="wrapper">
+            <form action="#">
+                <h1>CREATE YOUR ACCOUNT</h1>
+                <div class="user_details">
+                    <div class="input_pox">
+                        <span class="datails">Full Name</span>
+                        <input type="text" placeholder="enter name" required>
+                    </div>
+                    <div class="input_pox">
+                        <span class="datails">Username</span>
+                        <input type="text" placeholder="enter username" required>
+                    </div>
+                    <div class="input_pox">
+                        <span class="datails mt-3">Email</span>
+                        <input type="text" placeholder="enter email" required>
+                    </div>
+                    <div class="input_pox">
+                        <span class="datails mt-3">Phone Number</span>
+                        <input type="text" placeholder="enter phone" required>
+                    </div>
+                    <div class="input_pox">
+                        <span class="datails mt-4">Password</span>
+                        <input type="text" placeholder="enter password" required>
+                    </div>
+                    <div class="input_pox">
+                        <span class="datails mt-4">Confirm Password</span>
+                        <input type="text" placeholder="confirm password" required>
+                    </div>
+                </div>
+                <div class="button">
+                    <input class="mt-4" type="submit" value="SIGN UP">
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+{% endblock content %}

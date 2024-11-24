@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load static %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+
+{% endblock head %}
+
+{% block content %}
+<div class="row login justify-content-center">
+        
+        
+    <div class="col-6 login2">
+        <div class="wrapper">
+            <form action="">
+                <h1 class="mt-4">Welcome Back!</h1>
+                <h3 class="text-center mt-4">Login in to your account</h3>
+                <div class="input-box mt-5">
+                    <input type="text" placeholder="Username" required>
+                </div>
+                <div class="input-box">
+                    <input type="password" placeholder="Password" required>
+                </div>
+                <div class="remember-forgot">
+                    <label>
+                        <input type="checkbox">Remember me
+                    </label>
+                    <a href="#">Forgot password?</a>
+                </div>
+                <button type="submit" class="btn">Login</button>
+    
+                <div class="register-link">
+                    <p>Don't have an account?<a href="#"> Register</a></p>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}

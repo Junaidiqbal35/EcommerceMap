@@ -68,7 +68,7 @@ img .vert-move {
 }
 .input-box input:focus,
 .input-box input:valid{
-border-color: #e4bc84;
+border-color: #e294bc;
 }
 .wrapper .remember-forgot{
     display: flex;
@@ -154,7 +154,7 @@ color: #1f0801;
 }
 .user_details .input_pox input:focus,
 .user_details .input_pox input:valid{
-border-color: #e4bc84;
+border-color: #e294bc;
 }
 
 form input[type="radio"]{

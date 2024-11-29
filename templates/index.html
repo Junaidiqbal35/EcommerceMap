@@ -279,69 +279,69 @@
 {#        downloadButton.addTo(map);#}
 {#    </script>#}
 {#{% endblock extrascript %}#}
-
-
-<html>
-<head>
-    <title>Map Interface</title>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/esri-leaflet/dist/esri-leaflet.js"></script>
-    <style>
-        #map { height: 600px; width: 100%; }
-    </style>
-</head>
-<body>
-    <header>
-        <!-- You can add a navigation bar or a title here -->
-        <h1>Map Interface</h1>
-    </header>
-    <main>
-        <div id="map"></div>
-    </main>
-
-    <script>
-        // Initiate the Leaflet map with a default view
-        var map = L.map('map').setView([51.505, -0.09], 13);
-
-        // Add a base tile layer from OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-
-        // Convert the server and layer data from Django to a JavaScript-friendly format
-        const serversJson = '{{ servers_json|escapejs }}';
-        const layersJson = '{{ layers_json|escapejs }}';
-        
-        const serversData = serversJson ? JSON.parse(serversJson) : [];
-        console.log(serversData)
-        const layersData = layersJson ? JSON.parse(layersJson) : [];
-        console.log(layersData)
-
-        // Iterate over each layer and add it to the map
-        layersData.forEach(layer => {
-            // Find the server corresponding to this layer
-            const server = serversData.find(s => s.pk === layer.fields.server);
-
-            if (server) {
-                // Create a new FeatureLayer from the Esri plugin
-                const featureLayer = L.esri.featureLayer({
-                    url: server.fields.url,  // Base URL of the server
-                    where: `layer="${layer.fields.number}"`,  // Filter to load only specific layers
-                    style: function () {
-                        return { color: "#70ca49", weight: 2 };
-                    }
-                }).addTo(map);
-
-                // Optionally, you could bind popups or add other interactions here
-                featureLayer.bindPopup(function (layer) {
-                    return L.Util.template('<p>{name}</p>', layer.feature.properties);
-                });
-            }
-        });
-    </script>
-</body>
-</html>
+{##}
+{##}
+{#<html>#}
+{#<head>#}
+{#    <title>Map Interface</title>#}
+{#    <meta charset="utf-8" />#}
+{#    <meta name="viewport" content="width=device-width, initial-scale=1.0">#}
+{#    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />#}
+{#    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>#}
+{#    <script src="https://unpkg.com/esri-leaflet/dist/esri-leaflet.js"></script>#}
+{#    <style>#}
+{#        #map { height: 600px; width: 100%; }#}
+{#    </style>#}
+{#</head>#}
+{#<body>#}
+{#    <header>#}
+{#        <!-- You can add a navigation bar or a title here -->#}
+{#        <h1>Map Interface</h1>#}
+{#    </header>#}
+{#    <main>#}
+{#        <div id="map"></div>#}
+{#    </main>#}
+{##}
+{#    <script>#}
+{#        // Initiate the Leaflet map with a default view#}
+{#        var map = L.map('map').setView([51.505, -0.09], 13);#}
+{##}
+{#        // Add a base tile layer from OpenStreetMap#}
+{#        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {#}
+{#            maxZoom: 19,#}
+{#            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'#}
+{#        }).addTo(map);#}
+{##}
+{#        // Convert the server and layer data from Django to a JavaScript-friendly format#}
+{#        const serversJson = '{{ servers_json|escapejs }}';#}
+{#        const layersJson = '{{ layers_json|escapejs }}';#}
+{##}
+{#        const serversData = serversJson ? JSON.parse(serversJson) : [];#}
+{#        console.log(serversData)#}
+{#        const layersData = layersJson ? JSON.parse(layersJson) : [];#}
+{#        console.log(layersData)#}
+{##}
+{#        // Iterate over each layer and add it to the map#}
+{#        layersData.forEach(layer => {#}
+{#            // Find the server corresponding to this layer#}
+{#            const server = serversData.find(s => s.pk === layer.fields.server);#}
+{##}
+{#            if (server) {#}
+{#                // Create a new FeatureLayer from the Esri plugin#}
+{#                const featureLayer = L.esri.featureLayer({#}
+{#                    url: server.fields.url,  // Base URL of the server#}
+{#                    where: `layer="${layer.fields.number}"`,  // Filter to load only specific layers#}
+{#                    style: function () {#}
+{#                        return { color: "#70ca49", weight: 2 };#}
+{#                    }#}
+{#                }).addTo(map);#}
+{##}
+{#                // Optionally, you could bind popups or add other interactions here#}
+{#                featureLayer.bindPopup(function (layer) {#}
+{#                    return L.Util.template('<p>{name}</p>', layer.feature.properties);#}
+{#                });#}
+{#            }#}
+{#        });#}
+{#    </script>#}
+{#</body>#}
+{#</html>#}

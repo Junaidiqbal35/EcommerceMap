@@ -1,309 +1,227 @@
-{
-  "timestamp": "2024-03-22 21:13:47",
-  "servers": [
-    {
-      "id": 1,
-      "name": "QLD Globe",
-      "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/",
-      "extent": [
-        [
-          137.501267232,
-          -29.537803911,
-          154.00107611,
-          -8.47506055999997
-        ]
-      ]
-    },
-    {
-      "id": 2,
-      "name": "Unitywater Sewer",
-      "url": "https://services2.arcgis.com/tQg86iShPXJPWQWw/ArcGIS/rest/services/UWPublicAccessSewerInfrastructureLayers/FeatureServer/",
-      "extent": [
-        152.719755703407,
-        -27.4077349815127,
-        153.206812272816,
-        -26.2844751134184
-      ]
-    },
-    {
-      "id": 3,
-      "name": "Unitywater Water",
-      "url": "https://services2.arcgis.com/tQg86iShPXJPWQWw/ArcGIS/rest/services/UWPublicAccessWaterInfrastructureLayers/FeatureServer/",
-      "extent": [
-        152.049739334952,
-        -27.4224317906856,
-        153.208028092179,
-        -25.8832114100852
-      ]
-    },
-    {
-      "id": 4,
-      "name": "SCRC",
-      "url": "https://gislegacy.scc.qld.gov.au/arcgis/rest/services/UtilitiesCommunication/Utilities_SCRC/MapServer/",
-      "extent": [
-        [
-          152.653443514735,
-          -26.9813895159584,
-
-          153.15077545998,
-          -26.4348667863515
-        ]
-      ]
-    },
-    {
-      "id": 5,
-      "name": "Ergon",
-      "url": "https://services.arcgis.com/33eHbTVqo7gtiCE8/ArcGIS/rest/services/LookupandLive_Network_Public_EX_2021/FeatureServer/",
-      "extent": [
-        146.027690621,
-        -28.3370219449999,
-        153.551125735,
-        -17.5226682209999
-      ]
-    },
-    {
-      "id": 6,
-      "name": "Gold Coast City Sewer",
-      "url": "https://maps.cityofgoldcoast.com.au/arcgis/rest/services/Hosted/Sewer_Infrastructure/FeatureServer/",
-      "extent": [
-        [
-          153.193464081,
-          -28.177601532,
-          153.551849569,
-          -27.710643003
-        ]
-      ]
-    },
-    {
-      "id": 7,
-      "name": "Gold Coast City Water",
-      "url": "https://maps.cityofgoldcoast.com.au/arcgis/rest/services/Hosted/Water_Infrastructure/FeatureServer/",
-      "extent": [
-        [
-          153.185826189,
-          -28.1770060329999,
-          153.550753715,
-          -27.7082857359999
-        ]
-      ]
-    },
-    {
-      "id": 8,
-      "name": "Gold Coast City Stormwater",
-      "url": "https://maps.cityofgoldcoast.com.au/arcgis/rest/services/Hosted/Stormwater_Infrastructure/FeatureServer/",
-      "extent": [
-        [
-          153.169100979,
-          -28.24057555,
-          153.551203207,
-          -27.69366035
-        ]
-      ]
-    },
-    {
-      "id": 9,
-      "name": "Urban Utilities Sewer",
-      "url": "https://services3.arcgis.com/ocUCNI2h4moKOpKX/ArcGIS/rest/services/UU_Sewer_OpenData/FeatureServer/",
-      "extent": [
-        -180,
-        -90,
-        180,
-        90
-      ]
-    },
-    {
-      "id": 10,
-      "name": "Urban Utilities Water",
-      "url": "https://services3.arcgis.com/ocUCNI2h4moKOpKX/ArcGIS/rest/services/UU_Water_OpenData/FeatureServer/",
-      "extent": [
-        -180,
-        -89.9999999999967,
-        180,
-        89.9999999999967
-      ]
-    },
-    {
-      "id": 11,
-      "name": "Logan City",
-      "url": "https://services5.arcgis.com/ZUCWDRj8F77Xo351/arcgis/rest/services/SmartCitiesOD/FeatureServer/",
-      "extent": [
-        152.800171770733,
-        -27.938259926851,
-        153.28775502859,
-        -27.5870956337841
-      ]
-    },
-    {
-      "id": 12,
-      "name": "NSW Sixmaps",
-      "url": "https://maps4.six.nsw.gov.au/arcgis/rest/services/sixmaps/Boundaries/MapServer/",
-      "extent": [
-        [
-          140.333442057426,
-          -37.9999999718964,
-          159.281637935963,
-          -27.6509530599292
-        ]
-      ]
-    },
-    {
-      "id": 13,
-      "name": "Perth City",
-      "url": "https://services7.arcgis.com/v8XBa2naYNQGOjlG/ArcGIS/rest/services/INF_COMM_CONDUIT_PV/FeatureServer/",
-      "extent": [
-        115.841157335578,
-        -31.9642809752799,
-        115.883829984061,
-        -31.9450398379865
-      ]
-    },
-    {
-      "id": 14,
-      "name": "Redland City",
-      "url": "http://gis.redland.qld.gov.au/arcgis/rest/services/assets/a_asset_mapping/MapServer/",
-      "extent": [
-        [
-          153.123552302591,
-          -85.3455358847965,
-          158.917475364461,
-          -27.3877670717915
-        ]
-      ]
-    },
-    {
-      "id": 15,
-      "name": "Tasmania theList",
-      "url": "https://services.thelist.tas.gov.au/arcgis/rest/services/Public/Infrastructure/MapServer/",
-      "extent": [
-        [
-          2.07357218718025,
-          -85.1397660103436,
-          158.952206248945,
-          44.9451016431049
-        ]
-      ]
-    },
-    {
-      "id": 16,
-      "name": "Townsville City",
-      "url": "https://maps.townsville.qld.gov.au/arcgis/rest/services/DBYD/DBYD_Service_2/MapServer/",
-      "extent": [
-        [
-          -180,
-          -90,
-
-          180,
-          90
-        ]
-      ]
-    },
-    {
-      "id": 17,
-      "name": "Toowoomba Regional",
-      "url": "https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_TRMaps/MapServer/",
-      "extent": [
-        [
-          150.199408151646,
-          -28.260778227911,
-
-          152.575955277204,
-          -26.7404290369882
-        ]
-      ]
-    },
-    {
-      "id": 18,
-      "name": "Tweed Shire",
-      "url": "https://services1.arcgis.com/KURAxOhGWn5RdCPg/ArcGIS/rest/services/Water_ReticulationNetwork/FeatureServer/",
-      "extent": [
-        153.202349445741,
-        -28.4529136098453,
-        153.58394391182,
-        -28.1643040311058
-      ]
-    },
-    {
-      "id": 25,
-      "name": "QLD Contours",
-      "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/ContoursCache/MapServer/",
-      "extent": [
-        [
-          137.972248,
-          -29.179414,
-
-          153.5712685,
-          -10.0157845
-        ]
-      ]
-    },
-    {
-      "id": 26,
-      "name": "SCRC 1m Contours",
-      "url": "https://gislegacy.scc.qld.gov.au/arcgis/rest/services/Elevation/Contours_SCRC/MapServer/",
-      "extent": [
-        [
-          152.550801639367,
-          -26.985039642236,
-
-          153.151077534664,
-          -26.4307786642416
-        ]
-      ]
-    },
-    {
-      "id": 27,
-      "name": "City of Sydney SWD",
-      "url": "https://services1.arcgis.com/cNVyNtjGVZybOQWZ/ArcGIS/rest/services/Drainage_pipes/FeatureServer/",
-      "extent": [
-        151.17385397582,
-        -33.9241161470999,
-        151.23416567134,
-        -33.8531480368884
-      ]
-    },
-    {
-      "id": 28,
-      "name": "City of Sydney SWD Pits",
-      "url": "https://services1.arcgis.com/cNVyNtjGVZybOQWZ/ArcGIS/rest/services/Drainage_pits/FeatureServer/",
-      "extent": [
-        151.173867676123,
-        -33.9234773887271,
-        151.234164744191,
-        -33.8531993225449
-      ]
-    },
-    {
-      "id": 29,
-      "name": "City of Sydney 1m Contours",
-      "url": "https://services1.arcgis.com/cNVyNtjGVZybOQWZ/arcgis/rest/services/Terrain_Contours/FeatureServer/",
-      "extent": [
-        151.172776156605,
-        -33.9255600689921,
-        151.234903425392,
-        -33.8530165793935
-      ]
-    },
-    {
-      "id": 30,
-      "name": "City of Perth SWD",
-      "url": "https://services7.arcgis.com/v8XBa2naYNQGOjlG/ArcGIS/rest/services/INF_DRN_PIPES__PV/FeatureServer/",
-      "extent": [
-        115.813376095492,
-        -31.9894044118794,
-        115.884453609803,
-        -31.9421253421881
-      ]
-    },
-    {
-      "id": 31,
-      "name": "City of Perth SWD Pits",
-      "url": "https://services7.arcgis.com/v8XBa2naYNQGOjlG/ArcGIS/rest/services/INF_DRN_PITS_PV/FeatureServer/",
-      "extent": [
-        115.811787673736,
-        -31.989404412649,
-        115.884472205837,
-        -31.9421253421805
-      ]
-    }
-  ]
-}
+[
+  {
+    "id": 1,
+    "name": "QLD Globe",
+    "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/",
+    "extent_min_x": 137.501267232,
+    "extent_min_y": -29.537803911,
+    "extent_max_x": 154.00107611,
+    "extent_max_y": -8.47506055999997
+  },
+  {
+    "id": 2,
+    "name": "Unitywater Sewer",
+    "url": "https://services2.arcgis.com/tQg86iShPXJPWQWw/ArcGIS/rest/services/UWPublicAccessSewerInfrastructureLayers/FeatureServer/",
+    "extent_min_x": 152.719755703407,
+    "extent_min_y": -27.4077349815127,
+    "extent_max_x": 153.206812272816,
+    "extent_max_y": -26.2844751134184
+  },
+  {
+    "id": 3,
+    "name": "Unitywater Water",
+    "url": "https://services2.arcgis.com/tQg86iShPXJPWQWw/ArcGIS/rest/services/UWPublicAccessWaterInfrastructureLayers/FeatureServer/",
+    "extent_min_x": 152.049862303161,
+    "extent_min_y": -27.4224443477196,
+    "extent_max_x": 153.208022071543,
+    "extent_max_y": -25.8832240718459
+  },
+  {
+    "id": 4,
+    "name": "SCRC",
+    "url": "https://gislegacy.scc.qld.gov.au/arcgis/rest/services/UtilitiesCommunication/Utilities_SCRC/MapServer/",
+    "extent_min_x": 152.653443514735,
+    "extent_min_y": -26.9813895159584,
+    "extent_max_x": 153.15077545998,
+    "extent_max_y": -26.4348667863515
+  },
+  {
+    "id": 5,
+    "name": "Ergon",
+    "url": "https://services.arcgis.com/33eHbTVqo7gtiCE8/ArcGIS/rest/services/LookupandLive_Network_Public_EX_2021/FeatureServer/",
+    "extent_min_x": 146.027690621,
+    "extent_min_y": -28.3370219449999,
+    "extent_max_x": 153.551125735,
+    "extent_max_y": -17.5226682209999
+  },
+  {
+    "id": 6,
+    "name": "Gold Coast City Sewer",
+    "url": "https://maps.cityofgoldcoast.com.au/arcgis/rest/services/Hosted/Sewer_Infrastructure/FeatureServer/",
+    "extent_min_x": 153.193464081,
+    "extent_min_y": -28.177601532,
+    "extent_max_x": 153.551849569,
+    "extent_max_y": -27.710643003
+  },
+  {
+    "id": 7,
+    "name": "Gold Coast City Water",
+    "url": "https://maps.cityofgoldcoast.com.au/arcgis/rest/services/Hosted/Water_Infrastructure/FeatureServer/",
+    "extent_min_x": 153.185826189,
+    "extent_min_y": -28.1770060329999,
+    "extent_max_x": 153.550753715,
+    "extent_max_y": -27.7082857359999
+  },
+  {
+    "id": 8,
+    "name": "Gold Coast City Stormwater",
+    "url": "https://maps.cityofgoldcoast.com.au/arcgis/rest/services/Hosted/Stormwater_Infrastructure/FeatureServer/",
+    "extent_min_x": 153.169100979,
+    "extent_min_y": -28.24057555,
+    "extent_max_x": 153.551203207,
+    "extent_max_y": -27.69366035
+  },
+  {
+    "id": 9,
+    "name": "Urban Utilities Sewer",
+    "url": "https://services3.arcgis.com/ocUCNI2h4moKOpKX/ArcGIS/rest/services/UU_Sewer_OpenData/FeatureServer/",
+    "extent_min_x": -180,
+    "extent_min_y": -90,
+    "extent_max_x": 180,
+    "extent_max_y": 90
+  },
+  {
+    "id": 10,
+    "name": "Urban Utilities Water",
+    "url": "https://services3.arcgis.com/ocUCNI2h4moKOpKX/ArcGIS/rest/services/UU_Water_OpenData/FeatureServer/",
+    "extent_min_x": -180,
+    "extent_min_y": -89.9999999999967,
+    "extent_max_x": 180,
+    "extent_max_y": 89.9999999999967
+  },
+  {
+    "id": 11,
+    "name": "Logan City",
+    "url": "https://services5.arcgis.com/ZUCWDRj8F77Xo351/arcgis/rest/services/SmartCitiesOD/FeatureServer/",
+    "extent_min_x": 152.800171770733,
+    "extent_min_y": -27.938259926851,
+    "extent_max_x": 153.28775502859,
+    "extent_max_y": -27.5870956337841
+  },
+  {
+    "id": 12,
+    "name": "NSW Sixmaps",
+    "url": "https://maps4.six.nsw.gov.au/arcgis/rest/services/sixmaps/Boundaries/MapServer/",
+    "extent_min_x": 140.333442057426,
+    "extent_min_y": -37.9999999718964,
+    "extent_max_x": 159.281637935963,
+    "extent_max_y": -27.6509530599292
+  },
+  {
+    "id": 13,
+    "name": "Perth City",
+    "url": "https://services7.arcgis.com/v8XBa2naYNQGOjlG/ArcGIS/rest/services/INF_COMM_CONDUIT_PV/FeatureServer/",
+    "extent_min_x": 115.841157335578,
+    "extent_min_y": -31.9642809752799,
+    "extent_max_x": 115.883829984061,
+    "extent_max_y": -31.9450398379865
+  },
+  {
+    "id": 14,
+    "name": "Redland City",
+    "url": "http://gis.redland.qld.gov.au/arcgis/rest/services/assets/a_asset_mapping/MapServer/",
+    "extent_min_x": 153.123552302591,
+    "extent_min_y": -85.3455358847965,
+    "extent_max_x": 158.917475364461,
+    "extent_max_y": -27.3877670717915
+  },
+  {
+    "id": 15,
+    "name": "Tasmania theList",
+    "url": "https://services.thelist.tas.gov.au/arcgis/rest/services/Public/Infrastructure/MapServer/",
+    "extent_min_x": 2.07357218718025,
+    "extent_min_y": -85.1397660103436,
+    "extent_max_x": 158.952206248945,
+    "extent_max_y": 44.9451016431049
+  },
+  {
+    "id": 16,
+    "name": "Townsville City",
+    "url": "https://maps.townsville.qld.gov.au/arcgis/rest/services/DBYD/DBYD_Service_2/MapServer/",
+    "extent_min_x": -180,
+    "extent_min_y": -90,
+    "extent_max_x": 180,
+    "extent_max_y": 90
+  },
+  {
+    "id": 17,
+    "name": "Toowoomba Regional",
+    "url": "https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_TRMaps/MapServer/",
+    "extent_min_x": 150.199408151646,
+    "extent_min_y": -28.260778227911,
+    "extent_max_x": 152.575955277204,
+    "extent_max_y": -26.7404290369882
+  },
+  {
+    "id": 19,
+    "name": "WA Infrastructure",
+    "url": "https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Infrastructure_and_Utilities/MapServer/",
+    "extent_min_x": 96.829971125,
+    "extent_min_y": -35.130298371,
+    "extent_max_x": 128.953506631,
+    "extent_max_y": -10.413077232
+  },
+  {
+    "id": 25,
+    "name": "QLD Contours",
+    "url": "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/ContoursCache/MapServer/",
+    "extent_min_x": 137.972248,
+    "extent_min_y": -29.179414,
+    "extent_max_x": 153.5712685,
+    "extent_max_y": -10.0157845
+  },
+  {
+    "id": 26,
+    "name": "SCRC 1m Contours",
+    "url": "https://gislegacy.scc.qld.gov.au/arcgis/rest/services/Elevation/Contours_SCRC/MapServer/",
+    "extent_min_x": 152.550801639367,
+    "extent_min_y": -26.985039642236,
+    "extent_max_x": 153.151077534664,
+    "extent_max_y": -26.4307786642416
+  },
+  {
+    "id": 27,
+    "name": "City of Sydney SWD",
+    "url": "https://services1.arcgis.com/cNVyNtjGVZybOQWZ/ArcGIS/rest/services/Drainage_pipes/FeatureServer/",
+    "extent_min_x": 151.173861421492,
+    "extent_min_y": -33.9237672969499,
+    "extent_max_x": 151.23416567134,
+    "extent_max_y": -33.8531480368884
+  },
+  {
+    "id": 28,
+    "name": "City of Sydney SWD Pits",
+    "url": "https://services1.arcgis.com/cNVyNtjGVZybOQWZ/ArcGIS/rest/services/Drainage_pits/FeatureServer/",
+    "extent_min_x": 151.173867676123,
+    "extent_min_y": -33.9234773887271,
+    "extent_max_x": 151.234164744191,
+    "extent_max_y": -33.8531993225449
+  },
+  {
+    "id": 29,
+    "name": "City of Sydney 1m Contours",
+    "url": "https://services1.arcgis.com/cNVyNtjGVZybOQWZ/arcgis/rest/services/Terrain_Contours/FeatureServer/",
+    "extent_min_x": 151.172776156605,
+    "extent_min_y": -33.9255600689921,
+    "extent_max_x": 151.234903425392,
+    "extent_max_y": -33.8530165793935
+  },
+  {
+    "id": 30,
+    "name": "City of Perth SWD",
+    "url": "https://services7.arcgis.com/v8XBa2naYNQGOjlG/ArcGIS/rest/services/INF_DRN_PIPES__PV/FeatureServer/",
+    "extent_min_x": 115.813376095492,
+    "extent_min_y": -31.9894044118794,
+    "extent_max_x": 115.884453609803,
+    "extent_max_y": -31.9421253421881
+  },
+  {
+    "id": 31,
+    "name": "City of Perth SWD Pits",
+    "url": "https://services7.arcgis.com/v8XBa2naYNQGOjlG/ArcGIS/rest/services/INF_DRN_PITS_PV/FeatureServer/",
+    "extent_min_x": 115.811787673736,
+    "extent_min_y": -31.989404412649,
+    "extent_max_x": 115.884472205837,
+    "extent_max_y": -31.9421253421805
+  }
+]

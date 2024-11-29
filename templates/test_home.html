@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaflet with Esri Plugin</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/esri-leaflet@3.0.2/dist/esri-leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-hash/leaflet-hash.js"></script>
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+</head>
+<body>
+    <div id="map" style="height: 600px; width: 100%;"></div>
+
+    <script>
+        // Initialize the map
+        const map = L.map('map').setView([-27.4698, 153.0251], 8); // Centered in Queensland
+        L.hash(map);
+
+        // Add Geocoder
+        L.Control.geocoder().addTo(map);
+
+        // Base map
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Fetch and add layers from the backend
+        fetch('/api/layers/')
+            .then(response => response.json())
+            .then(data => {
+                console.log(data)
+                data.forEach(layer => {
+                    if (layer.server.url) {
+                        // Add Esri dynamic map layer
+                        const dynamicLayer = L.esri.dynamicMapLayer({
+                            url: layer.server.url
+                        }).addTo(map);
+
+                        // Optional: Add bounds if available
+                        const bounds = [
+                            [layer.server.extent_min_y, layer.server.extent_min_x],
+                            [layer.server.extent_max_y, layer.server.extent_max_x]
+                        ];
+                        L.rectangle(bounds, { color: "blue", weight: 1 })
+                            .addTo(map)
+                            .bindPopup(`Layer: ${layer.name}`);
+                    }
+                });
+            })
+            .catch(err => console.error('Error fetching layers:', err));
+    </script>
+</body>
+</html>

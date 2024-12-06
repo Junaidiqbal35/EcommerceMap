@@ -5,8 +5,7 @@ from .models import Server, Layer
 class ServerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Server
-        # fields = ['id', 'name', 'url', 'extent_min_x', 'extent_min_y', 'extent_max_x', 'extent_max_y']
-        fields = ['id', 'name', 'url']
+        fields = ['id', 'name', 'url', 'extent_min_x', 'extent_min_y', 'extent_max_x', 'extent_max_y']
 
 
 class LayerSerializer(serializers.ModelSerializer):

@@ -1,78 +1,57 @@
 {% extends "base.html" %}
 {% block content %}
-<div id="map" style="height: 600px; width: 100%;"></div>
-<button id="download-btn" style="margin-top: 10px; display: none;">Download Selected Data</button>
-{% endblock %}
+    <div id="map" style="height: 600px; width: 100%;"></div>
+
+{% endblock content %}
+
 {% block extrascript %}
-<script>
-    const map = L.map('map').setView([-27.4698, 153.0251], 8); // Centered in Queensland
-    L.hash(map);
+    <script>
+        // Initialize the map
+        const map = L.map('map').setView([-27.4698, 153.0251], 8); // Centered in Queensland
+        L.hash(map);
 
-    L.Control.geocoder().addTo(map);
+        // Add Geocoder
+        L.Control.geocoder().addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
+        // Base map
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
 
-    let selectedData = null; // To store data of the clicked marker
+        // Fetch and add layers from the backend
+        fetch('/layers/')
+            .then(response => response.json())
+            .then(data => {
+                console.log(data)
+                data.forEach(layer => {
+                    if (layer.server.url) {
+                        // Add Esri dynamic map layer
+                        const dynamicLayer = L.esri.dynamicMapLayer({
+                            url: layer.server.url
+                        }).addTo(map);
+                        console.log(dynamicLayer)
+                        
+                        console.log(layer.server.extent_min_y)
+                        console.log(layer.server.extent_min_x)
+                        console.log(layer.server.extent_max_y)
+                        console.log(layer.server.extent_max_x)
+                      
 
-    // Fetch layers dynamically and create markers
-    fetch('/api/layers/')
-        .then(response => response.json())
-        .then(data => {
-            data.forEach(layer => {
-                if (layer.server.url) {
-                    // Add a dynamic map layer
-                    const dynamicLayer = L.esri.dynamicMapLayer({
-                        url: layer.server.url
-                    }).addTo(map);
+                        // Optional: Add bounds if available
+                        const bounds = [
+                            [layer.server.extent_min_y, layer.server.extent_min_x],
+                            [layer.server.extent_max_y, layer.server.extent_max_x]
+                        ];
 
-                    // Calculate the center of the layer for marker placement
-                    const centerLat = (layer.server.extent_min_y + layer.server.extent_max_y) / 2;
-                    const centerLng = (layer.server.extent_min_x + layer.server.extent_max_x) / 2;
+                        {#L.rectangle(bounds, {  weight: 1 })#}
+                        {#    .addTo(map)#}
+                        {#    .bindPopup(`Layer: ${layer.name}`);#}
+                    }
+                });
+            })
+            
+            .catch(err => console.error('Error fetching layers:', err));
+           
 
-                    // Add a marker for each layer
-                    const marker = L.marker([centerLat, centerLng]).addTo(map);
-
-                    // Store layer data in marker's popup
-                    marker.bindPopup(`
-                        <b>${layer.name}</b><br>
-                        <button class="select-btn" data-layer='${JSON.stringify(layer)}'>Select</button>
-                    `);
-
-                    // Add event listener to handle selection
-                    marker.on('popupopen', function () {
-                        const button = document.querySelector('.select-btn');
-                        if (button) {
-                            button.addEventListener('click', function () {
-                                selectedData = JSON.parse(this.dataset.layer);
-                                document.getElementById('download-btn').style.display = 'block';
-                            });
-                        }
-                    });
-
-                    // Optionally add bounds rectangle
-                    const bounds = [
-                        [layer.server.extent_min_y, layer.server.extent_min_x],
-                        [layer.server.extent_max_y, layer.server.extent_max_x]
-                    ];
-                    L.rectangle(bounds, { color: "blue", weight: 1 }).addTo(map);
-                }
-            });
-        })
-        .catch(err => console.error('Error fetching layers:', err));
-
-    // Handle Download
-    document.getElementById('download-btn').addEventListener('click', () => {
-        if (selectedData) {
-            const blob = new Blob([JSON.stringify(selectedData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${selectedData.name}_data.json`; // Use the layer name for the file
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-    });
-</script>
+    </script>
 {% endblock extrascript %}

@@ -36,7 +36,6 @@ img .vert-move {
     box-shadow: rgba(100, 100, 111, 0.2) 0px 7px 29px 0px;
     border-radius: 5px;
     margin-bottom: 5%;
-    margin: 10%;
 }
 .wrapper h1{
     font-size: 36px;
@@ -49,6 +48,11 @@ img .vert-move {
     margin-top: 20px;
     
 }
+.wrapper .btn:hover{
+    background-color: #6DC1E6;
+    color: white;
+    font-weight: 800;
+}
 .input-box input{
     width: 100%;
     height: 100%;
@@ -56,7 +60,7 @@ img .vert-move {
     border: none;
     outline: none;
     border: 2px solid rgba(255, 255, 255, .2);
-    border-radius: 40px;
+    border-radius: 5px;
     font-size: 20px;
     color: #1f0801;
     padding: 20px 40px 20px 20px;
@@ -137,14 +141,14 @@ form .user_details .input_pox{
 }
 .user_details .input_pox input{
     width: 100%;
-    height: 100%;
+    height: 80%;
     background: transparent;
     outline: none;
     border: 2px solid rgba(255, 255, 255, .2);
-    border-radius: 40px;
+    border-radius: 5px;
     font-size: 16px;
     color: #1f0801;
-    padding-left: 20px;
+    padding-left: 10px;
     border-bottom-width: 2px;
     transition: all 0.3s ease;
     border-color: #1f0801;
@@ -181,10 +185,10 @@ form .button input{
     border-radius: 50px;
 }
 form .button input:hover{
-    background-color: transparent;
+    background-color: #6DC1E6;
     box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px;
-    color: #1f0801;
-    font-weight: 600;
+    color: white;
+    font-weight: 800;
 }
 @media (max-width: 584px){
     .container{

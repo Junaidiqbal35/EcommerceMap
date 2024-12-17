@@ -1,7 +1,7 @@
 import json
 
 from django.core.serializers import serialize
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 
 # Create your views here.
@@ -59,3 +59,24 @@ def get_layers(request):
         return JsonResponse(layers_data, safe=False)
 
     return JsonResponse({"error": "Bounding box not provided"}, status=400)
+
+
+def download_layer(request, layer_id):
+    try:
+        # Fetch the layer by ID
+        layer = Layer.objects.get(pk=layer_id)
+
+        # Export layer geometry as GeoJSON
+        geojson_data = serialize(
+            'geojson',
+            [layer],
+            geometry_field='geometry',
+            fields=('name', 'type', 'number', 'symbol')  # Add relevant fields here
+        )
+
+        # Send GeoJSON as an attachment
+        response = HttpResponse(geojson_data, content_type='application/json')
+        response['Content-Disposition'] = f'attachment; filename="layer_{layer_id}.geojson"'
+        return response
+    except Layer.DoesNotExist:
+        return JsonResponse({"error": "Layer not found"}, status=404)

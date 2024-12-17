@@ -30,12 +30,12 @@
                             url: layer.server.url
                         }).addTo(map);
                         console.log(dynamicLayer)
-                        
+
                         console.log(layer.server.extent_min_y)
                         console.log(layer.server.extent_min_x)
                         console.log(layer.server.extent_max_y)
                         console.log(layer.server.extent_max_x)
-                      
+
 
                         // Optional: Add bounds if available
                         const bounds = [
@@ -49,9 +49,9 @@
                     }
                 });
             })
-            
+
             .catch(err => console.error('Error fetching layers:', err));
-           
+
 
     </script>
 {% endblock extrascript %}

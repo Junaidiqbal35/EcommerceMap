@@ -218,3 +218,8 @@ form .button input:hover{
         width: auto!important;
     }
 }
+
+.asteriskField
+{
+    color: red !important;
+}

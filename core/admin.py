@@ -1,7 +1,7 @@
 from django.contrib import admin
 from import_export.admin import ImportExportModelAdmin
 
-from core.models import Server, Layer
+from core.models import Server, Layer, DownloadRecord
 from core.resources import ServerResource, LayerResource
 
 
@@ -19,3 +19,10 @@ class LayerAdmin(ImportExportModelAdmin):
     list_display = ('layer_id', 'name', 'type', 'server')
     list_filter = ('type', 'server')
     search_fields = ('name', 'server__name')
+
+
+@admin.register(DownloadRecord)
+class DownloadRecordAdmin(admin.ModelAdmin):
+    list_display = ('user', 'layer', 'latitude', 'longitude', 'zoom', 'downloaded_at')
+    search_fields = ('user__username', 'layer__name')
+    list_filter = ('downloaded_at',)

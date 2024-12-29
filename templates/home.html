@@ -1,14 +1,76 @@
+{#{% extends "base.html" %}#}
+{#{% block content %}#}
+{#    <div id="map" style="height: 600px; width: 100%;"></div>#}
+{#    <div id="layer-list">#}
+{#        <h3>Available Layers</h3>#}
+{#        <ul id="layers"></ul>#}
+{#    </div>#}
+{#{% endblock content %}#}
+{##}
+{#{% block extrascript %}#}
+{#    <script>#}
+{#        // Initialize the map#}
+{#        const map = L.map('map').setView([-27.4698, 153.0251], 8); // Centered in Queensland#}
+{#        L.hash(map);#}
+{##}
+{#        // Add Geocoder#}
+{#        L.Control.geocoder().addTo(map);#}
+{##}
+{#        // Base map#}
+{#        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {#}
+{#            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'#}
+{#        }).addTo(map);#}
+{##}
+{#        // Fetch and add layers from the backend#}
+{#        fetch('/layers/')#}
+{#            .then(response => response.json())#}
+{#            .then(data => {#}
+{#                console.log(data);#}
+{#                const layerList = document.getElementById("layers");#}
+{##}
+{#                data.forEach(layer => {#}
+{#                    if (layer.server.url) {#}
+{#                        // Add Esri dynamic map layer#}
+{#                        const dynamicLayer = L.esri.dynamicMapLayer({#}
+{#                            url: layer.server.url#}
+{#                        }).addTo(map);#}
+{##}
+{#                        // Add layer bounds (optional)#}
+{#                        const bounds = [#}
+{#                            [layer.server.extent_min_y, layer.server.extent_min_x],#}
+{#                            [layer.server.extent_max_y, layer.server.extent_max_x]#}
+{#                        ];#}
+{##}
+                        {#L.rectangle(bounds, { color: "blue", weight: 1 })#}
+                        {#    .addTo(map)#}
+                        {#    .bindPopup(`Layer: ${layer.name}`);#}
+{##}
+{#                        // Add layer download link to the list#}
+{#                        const listItem = document.createElement("li");#}
+{#                        listItem.innerHTML = `#}
+{#                            ${layer.name} #}
+{#                            <a href="/export-layer/${layer.layer_id}/dxf/" #}
+{#                               class="btn btn-sm btn-primary" #}
+{#                               target="_blank">Download DXF</a>#}
+{#                        `;#}
+{#                        layerList.appendChild(listItem);#}
+{#                    }#}
+{#                });#}
+{#            })#}
+{#            .catch(err => console.error('Error fetching layers:', err));#}
+{#    </script>#}
+{#{% endblock extrascript %}#}
+
 {% extends "base.html" %}
 {% block content %}
     <div id="map" style="height: 600px; width: 100%;"></div>
-
 {% endblock content %}
 
 {% block extrascript %}
     <script>
         // Initialize the map
         const map = L.map('map').setView([-27.4698, 153.0251], 8); // Centered in Queensland
-        L.hash(map);
+        L.hash(map); // Add hash navigation for lat/lng/zoom in the URL
 
         // Add Geocoder
         L.Control.geocoder().addTo(map);
@@ -18,40 +80,101 @@
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
-        // Fetch and add layers from the backend
+        // Marker cluster group to optimize performance
+        const markers = L.markerClusterGroup();
+        
+
+        // Fetch and add dynamic layers from the backend
         fetch('/layers/')
             .then(response => response.json())
             .then(data => {
-                console.log(data)
+                if (data.length === 0) {
+                    console.error("No layers found in the response.");
+                    return;
+                }
+
                 data.forEach(layer => {
-                    if (layer.server.url) {
+                    // Extract server and layer details
+                    const server = layer.server;
+                    const { layer_id, name, type, symbol, offsetX, offsetY } = layer;
+
+                    if (server.url) {
                         // Add Esri dynamic map layer
                         const dynamicLayer = L.esri.dynamicMapLayer({
-                            url: layer.server.url
+                            url: server.url
                         }).addTo(map);
-                        console.log(dynamicLayer)
+                    }
 
-                        console.log(layer.server.extent_min_y)
-                        console.log(layer.server.extent_min_x)
-                        console.log(layer.server.extent_max_y)
-                        console.log(layer.server.extent_max_x)
-
-
-                        // Optional: Add bounds if available
-                        const bounds = [
-                            [layer.server.extent_min_y, layer.server.extent_min_x],
-                            [layer.server.extent_max_y, layer.server.extent_max_x]
-                        ];
-
-                        {#L.rectangle(bounds, {  weight: 1 })#}
-                        {#    .addTo(map)#}
-                        {#    .bindPopup(`Layer: ${layer.name}`);#}
+                    if (layer.type === 'marker' && server.extent_min_x && server.extent_min_y) {
+                        // Add marker for each layer (using extents as fallback coordinates)
+                        const marker = L.marker([server.extent_min_y, server.extent_min_x], {
+                            icon: L.divIcon({
+                                className: 'custom-icon',
+                                html: `<div style="background-color: blue; width: 15px; height: 15px; border-radius: 50%;"></div>`
+                            })
+                        }).bindPopup(`
+                            <b>Layer ID:</b> ${layer_id}<br>
+                            <b>Name:</b> ${name}<br>
+                            <b>Type:</b> ${type}<br>
+                            <b>Symbol:</b> ${symbol || 'N/A'}<br>
+                            <b>OffsetX:</b> ${offsetX || 0}<br>
+                            <b>OffsetY:</b> ${offsetY || 0}
+                        `);
+                        markers.addLayer(marker);
                     }
                 });
-            })
 
+                // Add markers to the map
+                map.addLayer(markers);
+            })
             .catch(err => console.error('Error fetching layers:', err));
 
+        // Show information in a tooltip on map click
+        map.on('click', function (e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
 
+            // Call the info API
+            fetch(`/info/?lat=${lat}&lng=${lng}`)
+                .then(response => response.json())
+                .then(data => {
+                    const tooltipContent = data.name
+                        ? `<b>${data.name}</b><br>Type: ${data.type}<br>Distance: ${data.distance} meters<br>
+                           <button id="download-dxf-tooltip" class="btn btn-primary">Download DXF</button>`
+                        : data.info;
+
+                    // Add tooltip to the map
+                    const tooltip = L.popup()
+                        .setLatLng(e.latlng)
+                        .setContent(tooltipContent)
+                        .openOn(map);
+
+                    // Attach download handler if a layer exists
+                    if (data.name) {
+                        document.getElementById("download-dxf-tooltip").addEventListener("click", function () {
+                            // Build the download URL
+                            const downloadUrl = `/export-dxf/?lat=${lat}&lng=${lng}`;
+                            
+                            // Trigger download
+                            fetch(downloadUrl)
+                                .then(response => {
+                                    if (!response.ok) throw new Error('Failed to generate DXF.');
+                                    return response.blob();
+                                })
+                                .then(blob => {
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `layer_${data.name}_${lat}_${lng}.dxf`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                })
+                                .catch(err => console.error('Error downloading DXF:', err));
+                        });
+                    }
+                })
+                .catch(err => console.error('Error fetching layer info:', err));
+        });
     </script>
 {% endblock extrascript %}
+

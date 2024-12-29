@@ -1,5 +1,9 @@
-# mapapp/models.py
 from django.db import models
+from django.contrib.gis.db import models as gis_models
+
+from django.contrib.gis.geos import Point
+
+from accounts.models import User
 
 
 class Server(models.Model):
@@ -32,5 +36,24 @@ class Layer(models.Model):
     symbol = models.CharField(max_length=255, blank=True, null=True)
     insert = models.CharField(max_length=255, blank=True, null=True)
 
+    geometry = gis_models.GeometryField(null=True, blank=True)
+
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if self.offsetX and self.offsetY:
+            self.geometry = Point(self.offsetX, self.offsetY)
+        super().save(*args, **kwargs)
+
+
+class DownloadRecord(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='downloads')
+    layer = models.ForeignKey(Layer, on_delete=models.SET_NULL, null=True, blank=True)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    zoom = models.IntegerField()
+    downloaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.layer.name if self.layer else 'N/A'} - {self.downloaded_at}"

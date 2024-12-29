@@ -11,7 +11,7 @@ admin.site.index_title = "Welcome to EcommerceMap Portal"
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('core.urls')),
-    path('', TemplateView.as_view(template_name="pages/landing_page.html"), name='home'),
-    path('login/',  TemplateView.as_view(template_name="pages/login.html"),name='login'),
-    path('signup/',  TemplateView.as_view(template_name="pages/signup.html"),name='signup'),
+    path('accounts/', include('accounts.urls')),
+    path('accounts/', include('allauth.urls')),
+
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

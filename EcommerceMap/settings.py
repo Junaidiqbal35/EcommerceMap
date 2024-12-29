@@ -1,9 +1,7 @@
-
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -14,8 +12,8 @@ SECRET_KEY = 'django-insecure-e8b@m!mq(=z%^wu4hgn2i^t#sr2!+j28$m)cd1r+j&3kmq#^wo
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = ['*']
+CSRF_TRUSTED_ORIGINS = ['https://3a01-72-255-51-102.ngrok-free.app']
 
 # Application definition
 
@@ -26,14 +24,19 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.gis',
     'allauth',
     'allauth.account',
     'accounts',
     'core',
+    'crispy_forms',
+    'crispy_bootstrap5',
     'import_export',
     'rest_framework',
 ]
-
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = "bootstrap5"
+USE_DJANGO_JQUERY = True
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -66,21 +69,21 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'EcommerceMap.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
+        # 'ENGINE': 'django.db.backends.postgresql',
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': 'ecommerce_map_db',
         'USER': 'postgres',
         'PASSWORD': '123456',
         'HOST': 'localhost',
+        'PORT': '5433',
 
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -100,7 +103,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
@@ -117,7 +119,7 @@ ADMIN_SITE_HEADER = "Ecommerce MAP"
 
 STATIC_URL = 'static/'
 # STATIC_ROOT = os.path.join(BASE_DIR, 'static')
-STATICFILES_DIRS = [BASE_DIR / 'static',]
+STATICFILES_DIRS = [BASE_DIR / 'static', ]
 
 REST_FRAMEWORK = {
 
@@ -127,11 +129,15 @@ REST_FRAMEWORK = {
     ]
 }
 
-
 # All Auth Setting
-# ACCOUNT_AUTHENTICATION_METHOD = 'email'
 
+# ACCOUNT_AUTHENTICATION_METHOD = 'email'
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+GDAL_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\gdal304.dll'
+GEOS_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\geos_c.dll'

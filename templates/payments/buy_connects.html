@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="text-center mb-4">Buy Connects</h2>
+    <p class="text-center">Purchase connects to download maps.</p>
+
+    <div class="row">
+        <!-- Connect Package 1 -->
+        {% for package in packages %}
+            <div class="col-md-4">
+                <div class="card text-center shadow-lg">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ package.name }}</h5>
+                        <p class="card-text">{{ package.connects }} Connects</p>
+                        <h4 class="text-success">${{ package.price }}</h4>
+                        <form action="{% url 'create_checkout_session' package.stripe_plan_id %}" method="POST">
+                            {% csrf_token %}
+                            <input type="hidden" name="package_id" value="1">
+                            <button type="submit" class="btn btn-dark">Buy Now</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+    <hr>
+{% endblock %}

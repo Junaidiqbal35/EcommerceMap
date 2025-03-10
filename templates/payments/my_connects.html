@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{#{% block title %}My Connects {% endblock %}#}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="text-center">💳 My Connects <b>{{ connects }}</b> </h2>
+    
+{#    <div class="card p-4 shadow-sm">#}
+{#        <h4 class="text-primary">Available Connects: <b>{{ connects }}</b></h4>#}
+{#        <a href="{% url 'buy_connects' %}" class="btn btn-success mt-2">Buy More Connects</a>#}
+{#    </div>#}
+
+    <h3 class="mt-4">Transaction History</h3>
+    <table class="table table-bordered mt-3">
+        <thead class="table-dark">
+            <tr>
+                <th>Date</th>
+                <th>Connects Added</th>
+                <th>Amount Paid</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transaction in transactions %}
+            <tr>
+                <td>{{ transaction.created_at|date:"M d, Y H:i" }}</td>
+                <td>{{ transaction.connects_added }}</td>
+                <td>${{ transaction.amount_paid }}</td>
+                <td>
+                    {% if transaction.is_completed %}
+                        ✅ Completed
+                    {% else %}
+                        ⏳ Pending
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="text-center">No purchases yet</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+    <hr>
+{% endblock %}

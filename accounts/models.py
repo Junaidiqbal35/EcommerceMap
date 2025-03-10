@@ -11,7 +11,6 @@ class UserManager(BaseUserManager):
             raise ValueError("email is required")
         email = self.normalize_email(email)
         lower_letter_email = email.lower()
-        print(lower_letter_email)
         user = self.model(
             email=lower_letter_email,
             username=username,
@@ -37,6 +36,7 @@ class User(AbstractUser):
     password = models.CharField(max_length=100, blank=False)
     username = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=200, db_index=True, blank=True, null=True)
+    connects = models.IntegerField(default=0)
 
     objects = UserManager()
     USERNAME_FIELD = 'email'

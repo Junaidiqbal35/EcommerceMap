@@ -1,5 +1,6 @@
 from allauth.account.views import SignupView
 from django.contrib import messages
+from django.contrib.auth import logout
 from django.shortcuts import render, redirect
 
 from accounts.forms import CreateUserForm
@@ -20,3 +21,8 @@ class SignUpView(SignupView):
             messages.success(request, 'Your Account Is Created! Get Login.')
             return redirect('account_login')
         return render(request, self.template_name, {'form': form})
+
+
+def logout_view(request):
+    logout(request)
+    return redirect("/")

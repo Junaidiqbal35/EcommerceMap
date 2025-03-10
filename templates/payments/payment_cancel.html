@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5 text-center">
+    <h2 class="text-danger">Payment Canceled ❌</h2>
+    <p>Your payment was not completed. If this was a mistake, you can try again.</p>
+
+    <div class="card shadow-lg mt-4">
+        <div class="card-body">
+            <h4>Need Help?</h4>
+            <p>If you encountered an issue, please check your payment details and try again.</p>
+            <p>You can also <a href="{% url 'support_page' %}" class="text-primary">contact support</a> for assistance.</p>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'buy_connects' %}" class="btn btn-success">Try Again</a>
+        <a href="{% url 'map_view' %}" class="btn btn-primary">Return to Map</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: ecommerce_postgis_db
+    restart: always
+    environment:
+      POSTGRES_DB: ecommerce_map_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ecommerce_map_django:latest  # Name the Django image
+    container_name: ecommerce_map_web
+    restart: always
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgres://postgres:123456@db:5432/ecommerce_map_db
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    command: ["sh", "-c", "python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"]
+
+volumes:
+  postgres_data:

@@ -1,7 +1,16 @@
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv()
+# OR, the same with increased verbosity
+load_dotenv(verbose=True)
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -13,7 +22,6 @@ SECRET_KEY = 'django-insecure-e8b@m!mq(=z%^wu4hgn2i^t#sr2!+j28$m)cd1r+j&3kmq#^wo
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
-CSRF_TRUSTED_ORIGINS = ['https://3a01-72-255-51-102.ngrok-free.app']
 
 # Application definition
 
@@ -33,6 +41,7 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'import_export',
     'rest_framework',
+    'connects',
 ]
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
@@ -74,13 +83,12 @@ WSGI_APPLICATION = 'EcommerceMap.wsgi.application'
 
 DATABASES = {
     'default': {
-        # 'ENGINE': 'django.db.backends.postgresql',
         'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': 'ecommerce_map_db',
         'USER': 'postgres',
         'PASSWORD': '123456',
-        'HOST': 'localhost',
-        'PORT': '5433',
+        'HOST': 'db',
+        'PORT': '5432',
 
     }
 }
@@ -139,5 +147,11 @@ LOGOUT_REDIRECT_URL = "/"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-GDAL_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\gdal304.dll'
-GEOS_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\geos_c.dll'
+# GDAL_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\gdal304.dll'
+# GEOS_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\geos_c.dll'
+
+STRIPE_SECRET_KEY = os.getenv('STRIPE_TEST_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET_KEY = os.getenv('STRIPE_WEBHOOK_SECRET_KEY')
+STRIPE_SUCCESS_URL = os.getenv('STRIPE_SUCCESS_URL')
+STRIPE_CANCEL_URL = os.getenv('STRIPE_CANCEL_URL')
+STRIPE_BILLING_PORTAL = os.getenv('STRIPE_BILLING_PORTAL')

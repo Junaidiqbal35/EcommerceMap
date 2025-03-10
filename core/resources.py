@@ -1,4 +1,4 @@
-     # mapapp/resources.py
+from django.contrib.gis.geos import Point
 from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
 from .models import Server, Layer
@@ -23,3 +23,15 @@ class LayerResource(resources.ModelResource):
         import_id_fields = ('layer_id',)
         fields = ('layer_id', 'server', 'type', 'number', 'name', 'offsetX', 'offsetY', 'symbol', 'insert')
         export_order = ('layer_id', 'server', 'type', 'number', 'name', 'offsetX', 'offsetY', 'symbol', 'insert')
+
+    def before_save_instance(self, instance,  row, **kwargs):
+
+        if instance.offsetX and instance.offsetY:
+            instance.geometry = Point(instance.offsetX, instance.offsetY, srid=4326)
+        elif instance.server and instance.server.extent_min_x is not None:
+
+            center_x = (instance.server.extent_min_x + instance.server.extent_max_x) / 2
+            center_y = (instance.server.extent_min_y + instance.server.extent_max_y) / 2
+            instance.geometry = Point(center_x, center_y, srid=4326)
+
+        return super().before_save_instance(instance, row, **kwargs)

@@ -19,7 +19,7 @@
     {% block title %}
         <title>EcommerceMap</title>
     {% endblock title %}
-
+    
 
     {% block extrahead %}
     {% endblock extrahead %}
@@ -36,19 +36,34 @@
           </button>
           <div class="collapse navbar-collapse" id="navbarText">
             <ul class="navbar-nav ms-auto mb-2 mb-lg-0" >
-              <li class="nav-item">
-                <a class="nav-link " href="{% url 'account_login' %}" style="color: white;">Login</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link "  href="{% url 'account_signup' %}" style="color: white;">Signup</a>
-              </li>
+             <li class="nav-item">
+                        <a class="nav-link " href="{% url 'buy_connects' %}" style="color: white;">Buy Connects</a>
+             </li>
+             <li class="nav-item">
+                        <a class="nav-link " href="{% url 'connects_page' %}" style="color: white;">My Connects</a>
+             </li>
+      
+             
+              {% if not request.user.is_authenticated %}
+                   <li class="nav-item">
+                        <a class="nav-link " href="{% url 'account_login' %}" style="color: white;">Login</a>
+                   </li>
+                      <li class="nav-item">
+                        <a class="nav-link"  href="{% url 'account_signup' %}" style="color: white;">Signup</a>
+                      </li>
+                  {% else %}
+                   <li class="nav-item">
+                      <a class="nav-link" href="{% url 'logout' %}" style="color: white;">Logout</a>
+                  </li>
+                  
+              {% endif %}  
             </ul>
           </div>
         </div>
       </nav>
  
 
-{#    {% include 'partials/messages.html' %}#}
+
     <!-- body content -->
     {% block content %}
     {% endblock content %}

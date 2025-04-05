@@ -52,46 +52,63 @@
             map.addLayer(markers);
         }
         loadLayers();
-
-        /** Show Layer Info & Download Button **/
-        async function showLayerInfo(e, layer = null) {
-            const { lat, lng } = e.latlng;
-            let tooltipContent;
-
-            if (layer) {
+        
+    async function showLayerInfo(e, layer = null) {
+        const { lat, lng } = e.latlng;
+        let tooltipContent;
+        const userConnects = {{ user_connects|default:0 }}; 
+        console.log(userConnects)
+    
+        if (layer) {
+            tooltipContent = `
+                <b>Layer Name:</b> ${layer.name}<br>
+                <b>Type:</b> ${layer.type}<br>
+                <b>Latitude:</b> ${lat.toFixed(5)}<br>
+                <b>Longitude:</b> ${lng.toFixed(5)}<br>
+                ${userConnects > 0 ? `
+            <button id="download-dxf-btn" class="btn btn-dark text-white">Download DXF</button>
+            ` : `
+     
+            <a href="connects/buy-connects/" class="btn btn-dark text-white">Buy Connects</a>
+            `}    
+            `;
+        } else {
+            const data = await fetchData(`/info/?lat=${lat}&lng=${lng}`);
+            
+            if (data?.name) {
                 tooltipContent = `
-                    <b>Layer Name:</b> ${layer.name}<br>
-                    <b>Type:</b> ${layer.type}<br>
+                    <b>Layer Name:</b> ${data.name}<br>
+                    <b>Type:</b> ${data.type}<br>
                     <b>Latitude:</b> ${lat.toFixed(5)}<br>
                     <b>Longitude:</b> ${lng.toFixed(5)}<br>
-                    <button id="download-dxf-btn" class="btn btn-primary">Download DXF</button>
+                    <b>Distance:</b> ${data.distance} meters<br>
+               
                 `;
-            } else {
-                const data = await fetchData(`/info/?lat=${lat}&lng=${lng}`);
-                if (data?.name) {
-                    tooltipContent = `
-                        <b>Layer Name:</b> ${data.name}<br>
-                        <b>Type:</b> ${data.type}<br>
-                        <b>Latitude:</b> ${lat.toFixed(5)}<br>
-                        <b>Longitude:</b> ${lng.toFixed(5)}<br>
-                        <b>Distance:</b> ${data.distance} meters<br>
-                        <button id="download-dxf-btn" class="btn btn-primary">Download DXF</button>
-                    `;
+    
+                if (data.connects > 0) {
+                    // ✅ User has connects → Show "Download DXF" button
+                    tooltipContent += `<button id="download-dxf-btn" class="btn btn-primary">Download DXF</button>`;
                 } else {
-                    tooltipContent = data?.info || "No nearby layers found.";
+                    // ❌ User has no connects → Show "Buy Connects" button
+                    tooltipContent += `<a href="/buy-connects/" class="btn btn-warning">Buy Connects</a>`;
                 }
+            } else {
+                tooltipContent = data?.info || "No nearby layers found.";
             }
-
-            const tooltip = L.popup().setLatLng(e.latlng).setContent(tooltipContent).openOn(map);
-
-            // Attach download event after tooltip is added
-            setTimeout(() => {
-                const downloadBtn = document.getElementById("download-dxf-btn");
-                if (downloadBtn) {
-                    downloadBtn.addEventListener("click", () => downloadDXF(lat, lng));
-                }
-            }, 100);
         }
+
+    const tooltip = L.popup().setLatLng(e.latlng).setContent(tooltipContent).openOn(map);
+
+    // Attach download event after tooltip is added
+    setTimeout(() => {
+        const downloadBtn = document.getElementById("download-dxf-btn");
+        if (downloadBtn) {
+            downloadBtn.addEventListener("click", () => downloadDXF(lat, lng));
+        }
+    }, 100);
+}
+
+
 
         /** Download DXF File **/
         async function downloadDXF(lat, lng) {

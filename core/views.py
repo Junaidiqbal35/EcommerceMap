@@ -1,242 +1,218 @@
-import ezdxf
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.core.serializers import serialize
-from django.http import JsonResponse, HttpResponse
+from django.contrib.gis.db.models.functions import Distance
+from django.contrib.gis.geos import Point
 from django.shortcuts import render, redirect
-from django.contrib.gis.geos import Polygon
+from django.http import JsonResponse, HttpResponse
+from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
-# Create your views here.
-from rest_framework import generics
-from .models import Server, Layer, DownloadRecord
+from django.views.decorators.http import require_POST
+import ezdxf
 
-from .serializers import ServerSerializer, LayerSerializer
+from .models import Layer, DownloadRecord
+
+@login_required
+def home(request):
+    """Renders the main map page (home.html)."""
+    return render(request, "home.html")
+
 
 
 @login_required
-def index(request):
-    servers = Server.objects.all()
+def nearby_layers(request):
+    """
+    Uses PostGIS to find layers whose geometry is within dist (meters)
+    of a user-selected lat/lng point. This works for points, lines, polygons—
+    anything stored in 'geometry'.
+    """
+    try:
+        lat = float(request.GET.get("lat"))
+        lng = float(request.GET.get("lng"))
+        dist_m = float(request.GET.get("dist", 500))  # default 500 meters
+    except (TypeError, ValueError):
+        # If lat/lng/dist invalid or missing, return empty
+        return JsonResponse([], safe=False)
+
+    # Create a Point geometry (PostGIS expects (x=lng, y=lat)).
+    user_point = Point(lng, lat, srid=4326)
+
+    # Annotate each Layer with distance=Distance(...)
+    # Filter to layers within dist_m. Then order by ascending distance.
+    # (distance__lte works in meters because SRID=4326 + the Distance function
+    # automatically handles degrees->meters conversion if you have Spheroid distance
+    # support enabled. If it doesn't, you might need a geography field or transform().)
+    nearby_qs = (
+        Layer.objects
+        .annotate(distance=Distance("geometry", user_point))
+        .filter(distance__lte=dist_m)
+        .order_by("distance")
+    )
+
+    # Build JSON response
+    data = []
+    for lyr in nearby_qs:
+        data.append({
+            "id": lyr.layer_id,
+            "name": lyr.name,
+            "type": lyr.type,
+            # distance.m = distance in meters if your DB supports geodesic distance
+            "distance_m": round(lyr.distance.m, 1) if lyr.distance is not None else None
+        })
+
+    return JsonResponse(data, safe=False)
+
+@login_required
+def map_layers(request):
+    """
+    Returns an array of marker-like data for layers that actually have coordinates.
+    - If type='point' and offsetX, offsetY != 0 => interpret offset as lat/long
+    - If polygon/line => use geometry centroid if present
+    """
+    data = []
     layers = Layer.objects.all()
-    servers_json = serialize('json', servers)
-    layers_json = serialize('json', layers)
 
-    return render(request, 'home.html', {'servers_json': servers_json, 'layers_json': layers_json,
-                                         'user_connects': request.user.connects })
+    for lyr in layers:
+        layer_type = lyr.type.lower()
+        ox, oy = lyr.offsetX, lyr.offsetY
 
+        if layer_type == 'point':
+            # Must have nonzero offset to be valid
+            if (ox != 0 or oy != 0):
+                data.append({
+                    "id": lyr.layer_id,
+                    "name": lyr.name,
+                    "type": lyr.type,
+                    "lat": oy,
+                    "lng": ox
+                })
+        elif layer_type in ['polygon', 'polyline'] and lyr.geometry:
+            centroid = lyr.geometry.centroid
+            data.append({
+                "id": lyr.layer_id,
+                "name": lyr.name,
+                "type": lyr.type,
+                "lat": centroid.y,
+                "lng": centroid.x
+            })
+        # else skip any invalid or missing geometry
 
-class ServerListAPIView(generics.ListAPIView):
-    queryset = Server.objects.all()
-    serializer_class = ServerSerializer
-
-
-class LayerListAPIView(generics.ListAPIView):
-    queryset = Layer.objects.all()
-    serializer_class = LayerSerializer
-
-
-def get_layers(request):
-    bbox = request.GET.get('bbox')
-    if bbox:
-        min_x, min_y, max_x, max_y = map(float, bbox.split(','))
-
-        layers = Layer.objects.filter(
-            server__extent_min_x__lte=max_x, server__extent_max_x__gte=min_x,
-            server__extent_min_y__lte=max_y, server__extent_max_y__gte=min_y
-        )
-
-        print(layers)
-
-        layers_data = [
-            {
-                "id": layer.layer_id,
-                "name": layer.name,
-                "server": {
-                    "url": layer.server.url
-                },
-                "number": layer.number,
-                "type": layer.type
-            }
-            for layer in layers
-        ]
-        return JsonResponse(layers_data, safe=False)
-
-    return JsonResponse({"error": "Bounding box not provided"}, status=400)
-
-
-# @login_required
-# def export_dxf(request):
-#     print('export_dxf called')
-#
-#     user = request.user
-#
-#
-#     try:
-#         lat = float(request.GET.get('lat'))
-#         lng = float(request.GET.get('lng'))
-#         zoom = int(request.GET.get('zoom'))
-#         min_lat = float(request.GET.get('minLat'))
-#         min_lng = float(request.GET.get('minLng'))
-#         max_lat = float(request.GET.get('maxLat'))
-#         max_lng = float(request.GET.get('maxLng'))
-#
-#         bbox = Polygon.from_bbox((min_lng, min_lat, max_lng, max_lat))
-#         bbox.srid = 4326
-#
-#         doc = ezdxf.new(dxfversion="R2010")
-#         msp = doc.modelspace()
-#
-#         layers_in_bbox = Layer.objects.filter(geometry__intersects=bbox)
-#         print(f"Layers in bounding box: {layers_in_bbox}")
-#
-#         if not layers_in_bbox.exists():
-#             messages.warning(request, "No layers found in the selected area.")
-#             return redirect('home')
-#
-#         downloaded_layers = []
-#         for layer in layers_in_bbox:
-#             geometry = layer.geometry
-#
-#             if layer.type == 'point' and geometry.geom_type == 'Point':
-#                 msp.add_point((geometry.x, geometry.y))
-#
-#             elif layer.type == 'polyline' and geometry.geom_type == 'LineString':
-#                 points = [(p[0], p[1]) for p in geometry.coords]
-#                 msp.add_lwpolyline(points)
-#
-#             elif layer.type == 'polygon' and geometry.geom_type == 'Polygon':
-#                 exterior_coords = [(p[0], p[1]) for p in geometry.coords[0]]
-#                 msp.add_lwpolyline(exterior_coords, close=True)
-#
-#             downloaded_layers.append(layer)
-#
-#         # Deduct connects
-#         user.connects -= 1
-#         user.save()
-#
-#         # Record the download
-#         for layer in downloaded_layers:
-#             DownloadRecord.objects.create(
-#                 user=user,
-#                 layer=layer,
-#                 latitude=lat,
-#                 longitude=lng,
-#                 zoom=zoom,
-#             )
-#
-#         # Prepare the DXF response
-#         response = HttpResponse(content_type='application/dxf')
-#         response['Content-Disposition'] = f'attachment; filename="map_{lat}_{lng}_zoom{zoom}.dxf"'
-#         doc.write(response)
-#
-#         messages.success(request, f"Download successful! {user.connects} connects remaining.")
-#         return response
-#
-#     except Exception as e:
-#         messages.error(request, f"Error generating DXF: {str(e)}")
-#         return redirect('home')
+    return JsonResponse(data, safe=False)
 
 @login_required
-def export_dxf(request):
-    print('export_dxf called')
+def marker_layers(request):
+    """
+    Returns the single clicked layer or layers relevant to a 'marker'.
+    If the selected marker lacks geometry/offset, show a friendly message.
+    """
+    marker_id = request.GET.get("marker_id")
+    if not marker_id:
+        return JsonResponse([], safe=False)
+
+    lyr = Layer.objects.filter(layer_id=marker_id).first()
+    if not lyr:
+        # If layer ID doesn't exist
+        return JsonResponse([], safe=False)
+
+    # Check if valid geometry or offset
+    layer_type = lyr.type.lower()
+    if layer_type == 'point' and (lyr.offsetX == 0 and lyr.offsetY == 0):
+        # no offset => can't download
+        return JsonResponse([], safe=False)
+    elif layer_type in ['polygon','polyline'] and (not lyr.geometry):
+        return JsonResponse([], safe=False)
+
+    # Otherwise, we assume it's valid for download
+    data = [{
+        "id": lyr.layer_id,
+        "name": lyr.name,
+        "type": lyr.type
+    }]
+    return JsonResponse(data, safe=False)
+
+@login_required
+@csrf_exempt
+@require_POST
+def export_dxf_multi(request):
+
+    lat = request.POST.get("lat")
+    lng = request.POST.get("lng")
+    zoom = request.POST.get("zoom")
+
+    try:
+        lat = float(lat)
+    except:
+        lat = None
+
+    try:
+        lng = float(lng)
+    except:
+        lng = None
+
+    try:
+        zoom = int(zoom)
+    except:
+        zoom = None
+
+
+
 
     user = request.user
+    layer_ids = request.POST.getlist("layer_ids[]", [])
+    if not layer_ids:
+        return JsonResponse({"error": "No layers selected."}, status=400)
 
-    try:
-        lat = float(request.GET.get('lat'))
-        lng = float(request.GET.get('lng'))
-        zoom = int(request.GET.get('zoom'))
-        min_lat = float(request.GET.get('minLat'))
-        min_lng = float(request.GET.get('minLng'))
-        max_lat = float(request.GET.get('maxLat'))
-        max_lng = float(request.GET.get('maxLng'))
+    selected_layers = Layer.objects.filter(layer_id__in=layer_ids)
+    if not selected_layers.exists():
+        return JsonResponse({"error": "No valid layers found."}, status=404)
 
-        bbox = Polygon.from_bbox((min_lng, min_lat, max_lng, max_lat))
-        bbox.srid = 4326  # Ensure correct SRID
+    valid_layers = []
+    for lyr in selected_layers:
+        lt = lyr.type.lower()
+        if lt == 'point' and (lyr.offsetX == 0 and lyr.offsetY == 0):
+            continue  # skip invalid
+        elif lt in ['polygon','polyline'] and not lyr.geometry:
+            continue
+        valid_layers.append(lyr)
 
-        # Transform bbox to match your database SRID (replace 3857 with your actual SRID)
-        bbox.transform(4326)
+    if not valid_layers:
+        return JsonResponse({"error": "All selected layers are invalid or missing geometry."}, status=400)
 
-        # Expand the selection area slightly
-        buffer_size = 0.0001
-        bbox = bbox.buffer(buffer_size)
-
-        doc = ezdxf.new(dxfversion="R2010")
-        msp = doc.modelspace()
-
-        layers_in_bbox = Layer.objects.filter(geometry__intersects=bbox)
-        print(f"Bounding Box: {bbox.wkt}")
-        print(f"Total layers in DB: {Layer.objects.count()}")
-        print(f"Layers found: {layers_in_bbox}")
-
-        if not layers_in_bbox.exists():
-            messages.warning(request, "No layers found in the selected area.")
-            return redirect('home')
-
-        downloaded_layers = []
-        for layer in layers_in_bbox:
-            geometry = layer.geometry
-            layer_type = layer.type.lower()
-
-            print(f"Processing layer: {layer.name}, Type: {layer.type}, Geometry: {geometry.wkt}")
-
-            if layer_type == 'point' and geometry.geom_type == 'Point':
-                msp.add_point((geometry.x, geometry.y))
-
-            elif layer_type == 'polyline' and geometry.geom_type in ['LineString', 'MultiLineString']:
-                points = [(p[0], p[1]) for p in geometry.coords]
-                msp.add_lwpolyline(points)
-
-            elif layer_type == 'polygon' and geometry.geom_type in ['Polygon', 'MultiPolygon']:
-                exterior_coords = [(p[0], p[1]) for p in geometry.exterior.coords]
-                msp.add_lwpolyline(exterior_coords, close=True)
-
-            downloaded_layers.append(layer)
-
-        # Deduct connects
-        user.connects -= 1
+    # Check user has enough connects
+    needed = len(valid_layers)
+    if hasattr(user, 'connects'):
+        if user.connects < needed:
+            return JsonResponse({"error": f"Not enough connects. Need {needed}."}, status=403)
+        user.connects -= needed
         user.save()
 
-        # Record the download
-        for layer in downloaded_layers:
-            DownloadRecord.objects.create(
-                user=user,
-                layer=layer,
-                latitude=lat,
-                longitude=lng,
-                zoom=zoom,
-            )
+    # Generate DXF
+    doc = ezdxf.new(dxfversion="R2010")
+    msp = doc.modelspace()
 
-        # Prepare the DXF response
-        response = HttpResponse(content_type='application/dxf')
-        response['Content-Disposition'] = f'attachment; filename="map_{lat}_{lng}_zoom{zoom}.dxf"'
-        doc.write(response)
+    for lyr in valid_layers:
+        lt = lyr.type.lower()
+        geom = lyr.geometry
 
-        messages.success(request, f"Download successful! {user.connects} connects remaining.")
-        return response
+        if lt == 'point':
+            # using offset for point
+            x, y = lyr.offsetX, lyr.offsetY
+            # add point to dxf export
+            msp.add_point((x, y))
 
-    except Exception as e:
-        messages.error(request, f"Error generating DXF: {str(e)}")
-        return redirect('home')
+        elif lt == 'polyline' and geom and geom.geom_type in ['LineString','MultiLineString']:
+            coords = [(p[0], p[1]) for p in geom.coords]
+            msp.add_lwpolyline(coords)
+        elif lt == 'polygon' and geom and geom.geom_type in ['Polygon','MultiPolygon']:
+            exterior = [(p[0], p[1]) for p in geom.exterior.coords]
+            msp.add_lwpolyline(exterior, close=True)
 
+        DownloadRecord.objects.create(
+            user=user,
+            layer=lyr,
+            latitude=lat,
+            longitude=lng,
+            zoom=zoom
+        )
 
-@csrf_exempt
-@require_http_methods(["GET"])
-def get_layer_info(request):
-    try:
-        min_lat = float(request.GET.get("min_lat"))
-        min_lng = float(request.GET.get("min_lng"))
-        max_lat = float(request.GET.get("max_lat"))
-        max_lng = float(request.GET.get("max_lng"))
-        bbox = Polygon.from_bbox((min_lng, min_lat, max_lng, max_lat))
-        bbox.srid = 4326
-
-        layers = Layer.objects.filter(geometry__intersects=bbox)
-
-        data = [{"id": layer.id, "name": layer.name, "geometry": layer.geometry.geojson} for layer in layers]
-
-
-        return JsonResponse(data, safe=False)
-
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=400)
+    response = HttpResponse(content_type="application/dxf")
+    response["Content-Disposition"] = 'attachment; filename="selected_layers.dxf"'
+    doc.write(response)
+    return response

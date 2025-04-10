@@ -42,9 +42,9 @@ class Layer(models.Model):
 class DownloadRecord(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='downloads')
     layer = models.ForeignKey(Layer, on_delete=models.SET_NULL, null=True, blank=True)
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-    zoom = models.IntegerField()
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    zoom = models.IntegerField(null=True, blank=True)
     downloaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

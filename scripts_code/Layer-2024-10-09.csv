@@ -1,4 +1,7 @@
 layer_id,server,number,name,offsetX,offsetY,symbol,insert,type
+999,1,0,Test Hydrant,153.0,-27.0,hydrant,,point
+998,1,0,Test Valve,153.0005,-27.0005,valve,,point
+997,1,0,Test Maintenance Hole,153.1,-26.9,maintenance_hole,,point
 68,31,0,C_SWD_EX PIT,0.0,0.0,,,point
 67,30,0,C_SWD_EX STORMWATER DRAINAGE,0.0,0.0,maintenance_hole,C_SWD PIT,polyline
 66,29,0,1m_CONTOURS,0.0,0.0,,,polyline

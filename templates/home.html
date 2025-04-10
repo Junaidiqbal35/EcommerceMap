@@ -1,135 +1,228 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block content %}
-    <div id="map" style="height: 600px; width: 100%;"></div>
+<style>
+  #map {
+    height: 600px;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+  }
+  #sidebar {
+    position: absolute;
+    top: 60px; 
+    left: 0;
+    width: 280px;
+    max-height: calc(100% - 80px);
+    background: #222;
+    color: #ccc;
+    padding: 15px;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+    transform: translateX(-100%); /* hidden by default */
+    transition: transform 0.3s ease-in-out;
+    overflow-y: auto;
+    z-index: 1000;
+  }
+  #sidebar.active {
+    transform: translateX(0); /* show sidebar */
+  }
+  #sidebar h4 {
+    margin-top: 0;
+    color: #fff;
+  }
+  #sidebar .btn-close {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.2rem;
+    float: right;
+    cursor: pointer;
+  }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: #222 !important;
+    color: #fff !important;
+  }
+</style>
+
+<div id="sidebar">
+  <button class="btn-close" id="closeSidebar">&times;</button>
+  <h4>Nearby Layers</h4>
+  <form id="nearbyLayerForm">
+    <div id="layerListContainer"></div>
+    <p id="connectsInfo" style="font-size: 0.9rem; color: #aaa;"></p>
+    <button type="submit" class="btn btn-sm btn-primary mt-3">
+      Download Selected
+    </button>
+  </form>
+</div>
+
+<div id="map"></div>
 {% endblock content %}
 
 {% block extrascript %}
+<!-- If you want to use leaflet.markercluster -->
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"
+/>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"
+/>
+
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        // Initialize Leaflet Map
-        const map = L.map("map").setView([-27.4698, 153.0251], 8);
-        L.hash(map);
-        L.Control.geocoder().addTo(map);
+document.addEventListener("DOMContentLoaded", function() {
+  const map = L.map("map").setView([-27.4698, 153.0251], 10);
+     L.hash(map);
+      L.Control.geocoder().addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
 
-        // Add OpenStreetMap Tile Layer
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        }).addTo(map);
+  // For clustering many point markers:
+  const markers = L.markerClusterGroup();
+  map.addLayer(markers);
 
-        // Marker Cluster Group
-        const markers = L.markerClusterGroup();
-        
-        async function fetchData(url) {
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-                return await response.json();
-            } catch (error) {
-                console.error(`Error fetching ${url}:`, error);
-                return null;
-            }
-        }
+  // Simple fetch utility
+  async function fetchData(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      console.error("Fetch error:", err);
+      return null;
+    }
+  }
 
-        /** Load Layers on Map **/
-        async function loadLayers() {
-            const data = await fetchData('/layers/');
-            if (!data || data.length === 0) {
-                console.warn("No layers found.");
-                return;
-            }
+  // 1) Load your existing "map-layers" to place markers on the map
+  //    so the user can click them (this is your existing code).
+  async function loadMarkers() {
+    const data = await fetchData("/map-layers/");
+    if (!data) return;
+    markers.clearLayers();
 
-            data.forEach(layer => {
-                const { extent_min_x, extent_min_y } = layer.server || {};
-                if (extent_min_x && extent_min_y) {
-                    const marker = L.marker([extent_min_y, extent_min_x])
-                        .bindPopup(`Layer: ${layer.name}`)
-                        .on('click', (e) => showLayerInfo(e, layer));  
-                    markers.addLayer(marker);
-                }
+    data.forEach(l => {
+      const marker = L.marker([l.lat, l.lng]);
+      // We add a "Nearby Layers" button in the popup
+      marker.bindPopup(`
+        <b>${l.name}</b> [${l.type}]<br/>
+        <button class="btn btn-sm btn-primary" id="openNearbyBtn"
+          data-lat="${l.lat}" data-lng="${l.lng}">
+          Nearby Layers
+        </button>
+      `);
+      // On popup open, wire up the button
+      marker.on("popupopen", () => {
+        setTimeout(() => {
+          const openBtn = document.getElementById("openNearbyBtn");
+          if (openBtn) {
+            openBtn.addEventListener("click", () => {
+              showSidebar(openBtn.dataset.lat, openBtn.dataset.lng);
             });
-
-            map.addLayer(markers);
-        }
-        loadLayers();
-        
-    async function showLayerInfo(e, layer = null) {
-        const { lat, lng } = e.latlng;
-        let tooltipContent;
-        const userConnects = {{ user_connects|default:0 }}; 
-        console.log(userConnects)
-    
-        if (layer) {
-            tooltipContent = `
-                <b>Layer Name:</b> ${layer.name}<br>
-                <b>Type:</b> ${layer.type}<br>
-                <b>Latitude:</b> ${lat.toFixed(5)}<br>
-                <b>Longitude:</b> ${lng.toFixed(5)}<br>
-                ${userConnects > 0 ? `
-            <button id="download-dxf-btn" class="btn btn-dark text-white">Download DXF</button>
-            ` : `
-     
-            <a href="connects/buy-connects/" class="btn btn-dark text-white">Buy Connects</a>
-            `}    
-            `;
-        } else {
-            const data = await fetchData(`/info/?lat=${lat}&lng=${lng}`);
-            
-            if (data?.name) {
-                tooltipContent = `
-                    <b>Layer Name:</b> ${data.name}<br>
-                    <b>Type:</b> ${data.type}<br>
-                    <b>Latitude:</b> ${lat.toFixed(5)}<br>
-                    <b>Longitude:</b> ${lng.toFixed(5)}<br>
-                    <b>Distance:</b> ${data.distance} meters<br>
-               
-                `;
-    
-                if (data.connects > 0) {
-                    // ✅ User has connects → Show "Download DXF" button
-                    tooltipContent += `<button id="download-dxf-btn" class="btn btn-primary">Download DXF</button>`;
-                } else {
-                    // ❌ User has no connects → Show "Buy Connects" button
-                    tooltipContent += `<a href="/buy-connects/" class="btn btn-warning">Buy Connects</a>`;
-                }
-            } else {
-                tooltipContent = data?.info || "No nearby layers found.";
-            }
-        }
-
-    const tooltip = L.popup().setLatLng(e.latlng).setContent(tooltipContent).openOn(map);
-
-    // Attach download event after tooltip is added
-    setTimeout(() => {
-        const downloadBtn = document.getElementById("download-dxf-btn");
-        if (downloadBtn) {
-            downloadBtn.addEventListener("click", () => downloadDXF(lat, lng));
-        }
-    }, 100);
-}
-
-
-
-        /** Download DXF File **/
-        async function downloadDXF(lat, lng) {
-            const downloadUrl = `/export-dxf/?lat=${lat}&lng=${lng}&zoom=${map.getZoom()}&minLat=${map.getBounds().getSouth()}&minLng=${map.getBounds().getWest()}&maxLat=${map.getBounds().getNorth()}&maxLng=${map.getBounds().getEast()}`;
-
-            try {
-                const response = await fetch(downloadUrl);
-                if (!response.ok) throw new Error("Failed to generate DXF.");
-                const blob = await response.blob();
-
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `layer_${lat.toFixed(5)}_${lng.toFixed(5)}.dxf`;
-                a.click();
-                URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error("Error downloading DXF:", error);
-            }
-        }
-        map.on("click", showLayerInfo);
+          }
+        }, 100);
+      });
+      markers.addLayer(marker);
     });
+  }
+  loadMarkers();
+
+  // 2) The sidebar logic
+  const sidebar = document.getElementById("sidebar");
+  const closeSidebarBtn = document.getElementById("closeSidebar");
+  const layerListContainer = document.getElementById("layerListContainer");
+  const connectsInfo = document.getElementById("connectsInfo");
+  let clickedLat = null;
+  let clickedLng = null;
+
+
+  closeSidebarBtn.addEventListener("click", () => {
+    sidebar.classList.remove("active");
+  });
+
+  // Show the sidebar with relevant layers
+  async function showSidebar(lat, lng) {
+     clickedLat = parseFloat(lat);  // track for later use
+     clickedLng = parseFloat(lng);  
+    sidebar.classList.add("active");
+    layerListContainer.innerHTML = "<em>Loading nearby layers...</em>";
+    connectsInfo.textContent = "";
+
+    // e.g. 500 meter search radius
+    const dist = 500;
+    const data = await fetchData(`/nearby-layers/?lat=${lat}&lng=${lng}&dist=${dist}`);
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      layerListContainer.innerHTML = "<em>No layers found within range.</em>";
+      return;
+    }
+
+    // Render checkboxes
+    let html = "";
+    data.forEach(d => {
+      html += `
+        <div>
+          <input type="checkbox" name="layer_ids" value="${d.id}" checked />
+          <label>${d.name} [${d.type}] ~ ${d.distance_m}m away</label>
+        </div>
+      `;
+    });
+    layerListContainer.innerHTML = html;
+
+    // Listen for changes, update "connects" count
+    updateConnectsInfo();
+    layerListContainer.addEventListener("change", updateConnectsInfo);
+  }
+
+  function updateConnectsInfo() {
+    const checked = layerListContainer.querySelectorAll('input[name="layer_ids"]:checked');
+    connectsInfo.textContent = checked.length > 0
+      ? `Will cost ${checked.length} connects.`
+      : "No layers selected.";
+  }
+
+  // 3) On form submit, POST the selected layer IDs to export_dxf_multi
+  document.getElementById("nearbyLayerForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+    const checks = layerListContainer.querySelectorAll('input[name="layer_ids"]:checked');
+    if (checks.length === 0) {
+      alert("Select at least one layer");
+      return;
+    }
+    const formData = new FormData();
+    checks.forEach(c => formData.append("layer_ids[]", c.value));
+    formData.append("lat", clickedLat);
+    formData.append("lng", clickedLng);
+    formData.append("zoom", map.getZoom());
+
+    try {
+      const resp = await fetch("/export-dxf-multi/", {
+        method: "POST",
+        body: formData
+      });
+      if (!resp.ok) {
+        const err = await resp.json();
+        alert(err.error || "Download error");
+        return;
+      }
+      // Download the returned DXF
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "nearby_layers.dxf";
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Close the sidebar
+      sidebar.classList.remove("active");
+    } catch (err) {
+      console.error("DXF Export error:", err);
+      alert("An error occurred during the download.");
+    }
+  });
+});
 </script>
 {% endblock extrascript %}

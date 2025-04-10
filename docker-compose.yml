@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ecommerce_map_django:latest  # Name the Django image
+    image: ecommerce_map_django:latest
     container_name: ecommerce_map_web
     restart: always
     depends_on:

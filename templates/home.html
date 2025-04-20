@@ -96,9 +96,7 @@ document.addEventListener("DOMContentLoaded", function() {
       return null;
     }
   }
-
-  // 1) Load your existing "map-layers" to place markers on the map
-  //    so the user can click them (this is your existing code).
+    
   async function loadMarkers() {
     const data = await fetchData("/map-layers/");
     if (!data) return;
@@ -114,7 +112,7 @@ document.addEventListener("DOMContentLoaded", function() {
           Nearby Layers
         </button>
       `);
-      // On popup open, wire up the button
+  
       marker.on("popupopen", () => {
         setTimeout(() => {
           const openBtn = document.getElementById("openNearbyBtn");
@@ -143,9 +141,9 @@ document.addEventListener("DOMContentLoaded", function() {
     sidebar.classList.remove("active");
   });
 
-  // Show the sidebar with relevant layers
+
   async function showSidebar(lat, lng) {
-     clickedLat = parseFloat(lat);  // track for later use
+     clickedLat = parseFloat(lat);  
      clickedLng = parseFloat(lng);  
     sidebar.classList.add("active");
     layerListContainer.innerHTML = "<em>Loading nearby layers...</em>";
@@ -158,8 +156,7 @@ document.addEventListener("DOMContentLoaded", function() {
       layerListContainer.innerHTML = "<em>No layers found within range.</em>";
       return;
     }
-
-    // Render checkboxes
+      // Render checkboxes
     let html = "";
     data.forEach(d => {
       html += `
@@ -183,7 +180,7 @@ document.addEventListener("DOMContentLoaded", function() {
       : "No layers selected.";
   }
 
-  // 3) On form submit, POST the selected layer IDs to export_dxf_multi
+
   document.getElementById("nearbyLayerForm").addEventListener("submit", async function(e) {
     e.preventDefault();
     const checks = layerListContainer.querySelectorAll('input[name="layer_ids"]:checked');
@@ -207,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
         alert(err.error || "Download error");
         return;
       }
-      // Download the returned DXF
+
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -216,7 +213,7 @@ document.addEventListener("DOMContentLoaded", function() {
       a.click();
       URL.revokeObjectURL(url);
 
-      // Close the sidebar
+   
       sidebar.classList.remove("active");
     } catch (err) {
       console.error("DXF Export error:", err);

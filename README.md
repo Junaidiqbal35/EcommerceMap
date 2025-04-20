@@ -61,3 +61,19 @@ sudo apt install gdal-bin libgdal-dev python3-gdal
     GEOS_LIBRARY_PATH = r'C:\Users\YourUsername\XYZDIRECTORY\EcommerceMap\.venv\Lib\site-packages\osgeo\geos_c.dll' 
     
 ```
+
+
+
+
+# Build Docker images
+docker-compose build
+
+# Run django command in the container
+docker-compose exec web python manage.py migrate
+docker-compose exec web python manage.py createsuperuser
+
+# Start the containers
+docker-compose up 
+
+# Check logs (if needed)
+docker-compose logs -f

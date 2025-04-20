@@ -9,26 +9,21 @@ import ezdxf
 
 from .models import Layer, DownloadRecord
 
+
 @login_required
 def home(request):
     """Renders the main map page (home.html)."""
     return render(request, "home.html")
 
 
-
 @login_required
 def nearby_layers(request):
-    """
-    Uses PostGIS to find layers whose geometry is within dist (meters)
-    of a user-selected lat/lng point. This works for points, lines, polygons—
-    anything stored in 'geometry'.
-    """
     try:
         lat = float(request.GET.get("lat"))
         lng = float(request.GET.get("lng"))
         dist_m = float(request.GET.get("dist", 500))  # default 500 meters
     except (TypeError, ValueError):
-        # If lat/lng/dist invalid or missing, return empty
+
         return JsonResponse([], safe=False)
 
     # Create a Point geometry (PostGIS expects (x=lng, y=lat)).
@@ -53,11 +48,12 @@ def nearby_layers(request):
             "id": lyr.layer_id,
             "name": lyr.name,
             "type": lyr.type,
-            # distance.m = distance in meters if your DB supports geodesic distance
+            # distance.m = distance in meters, DB supports geodesic distance
             "distance_m": round(lyr.distance.m, 1) if lyr.distance is not None else None
         })
 
     return JsonResponse(data, safe=False)
+
 
 @login_required
 def map_layers(request):
@@ -74,7 +70,7 @@ def map_layers(request):
         ox, oy = lyr.offsetX, lyr.offsetY
 
         if layer_type == 'point':
-            # Must have nonzero offset to be valid
+
             if (ox != 0 or oy != 0):
                 data.append({
                     "id": lyr.layer_id,
@@ -92,16 +88,12 @@ def map_layers(request):
                 "lat": centroid.y,
                 "lng": centroid.x
             })
-        # else skip any invalid or missing geometry
 
     return JsonResponse(data, safe=False)
 
+
 @login_required
 def marker_layers(request):
-    """
-    Returns the single clicked layer or layers relevant to a 'marker'.
-    If the selected marker lacks geometry/offset, show a friendly message.
-    """
     marker_id = request.GET.get("marker_id")
     if not marker_id:
         return JsonResponse([], safe=False)
@@ -116,7 +108,7 @@ def marker_layers(request):
     if layer_type == 'point' and (lyr.offsetX == 0 and lyr.offsetY == 0):
         # no offset => can't download
         return JsonResponse([], safe=False)
-    elif layer_type in ['polygon','polyline'] and (not lyr.geometry):
+    elif layer_type in ['polygon', 'polyline'] and (not lyr.geometry):
         return JsonResponse([], safe=False)
 
     # Otherwise, we assume it's valid for download
@@ -127,11 +119,11 @@ def marker_layers(request):
     }]
     return JsonResponse(data, safe=False)
 
+
 @login_required
 @csrf_exempt
 @require_POST
 def export_dxf_multi(request):
-
     lat = request.POST.get("lat")
     lng = request.POST.get("lng")
     zoom = request.POST.get("zoom")
@@ -151,9 +143,6 @@ def export_dxf_multi(request):
     except:
         zoom = None
 
-
-
-
     user = request.user
     layer_ids = request.POST.getlist("layer_ids[]", [])
     if not layer_ids:
@@ -163,12 +152,13 @@ def export_dxf_multi(request):
     if not selected_layers.exists():
         return JsonResponse({"error": "No valid layers found."}, status=404)
 
+    # Filter out invalid layers
     valid_layers = []
     for lyr in selected_layers:
         lt = lyr.type.lower()
         if lt == 'point' and (lyr.offsetX == 0 and lyr.offsetY == 0):
-            continue  # skip invalid
-        elif lt in ['polygon','polyline'] and not lyr.geometry:
+            continue
+        elif lt in ['polygon', 'polyline'] and not lyr.geometry:
             continue
         valid_layers.append(lyr)
 
@@ -183,7 +173,7 @@ def export_dxf_multi(request):
         user.connects -= needed
         user.save()
 
-    # Generate DXF
+    # Create DXF
     doc = ezdxf.new(dxfversion="R2010")
     msp = doc.modelspace()
 
@@ -192,18 +182,29 @@ def export_dxf_multi(request):
         geom = lyr.geometry
 
         if lt == 'point':
-            # using offset for point
+            # Use offset for single point
             x, y = lyr.offsetX, lyr.offsetY
-            # add point to dxf export
             msp.add_point((x, y))
 
-        elif lt == 'polyline' and geom and geom.geom_type in ['LineString','MultiLineString']:
-            coords = [(p[0], p[1]) for p in geom.coords]
-            msp.add_lwpolyline(coords)
-        elif lt == 'polygon' and geom and geom.geom_type in ['Polygon','MultiPolygon']:
-            exterior = [(p[0], p[1]) for p in geom.exterior.coords]
-            msp.add_lwpolyline(exterior, close=True)
+        elif lt == 'polyline' and geom:
+            # Handle both LineString and MultiLineString
+            if geom.geom_type == 'LineString':
+                coords = list(geom.coords)
+                msp.add_lwpolyline(coords)
+            elif geom.geom_type == 'MultiLineString':
+                for line in geom:
+                    coords = list(line.coords)
+                    msp.add_lwpolyline(coords)
 
+        elif lt == 'polygon' and geom:
+
+            if geom.geom_type == 'Polygon':
+                _export_polygon(geom, msp)
+            elif geom.geom_type == 'MultiPolygon':
+                for poly in geom:
+                    _export_polygon(poly, msp)
+
+        # Log the download
         DownloadRecord.objects.create(
             user=user,
             layer=lyr,
@@ -216,3 +217,12 @@ def export_dxf_multi(request):
     response["Content-Disposition"] = 'attachment; filename="selected_layers.dxf"'
     doc.write(response)
     return response
+
+
+def _export_polygon(polygon, msp):
+    exterior_coords = list(polygon.exterior.coords)
+    msp.add_lwpolyline(exterior_coords, close=True)
+
+    for hole in polygon.interiors:
+        hole_coords = list(hole.coords)
+        msp.add_lwpolyline(hole_coords, close=True)

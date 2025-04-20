@@ -22,10 +22,10 @@ RUN apt-get update && apt-get install -y \
 ENV GDAL_LIBRARY_PATH=/usr/lib/libgdal.so
 ENV GEOS_LIBRARY_PATH=/usr/lib/libgeos_c.so
 
-# Set working directory
+
 WORKDIR /app
 
-# Copy the requirements file first (for caching)
+
 COPY requirements.txt /app/
 
 # Install Python dependencies

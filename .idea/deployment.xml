@@ -5,7 +5,7 @@
       <paths name="map server">
         <serverdata>
           <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/home/pyapps/EcommerceMap" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

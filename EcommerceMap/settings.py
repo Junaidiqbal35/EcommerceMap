@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'import_export',
     'rest_framework',
     'connects',
+    'demo',
 ]
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
@@ -77,7 +78,9 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'EcommerceMap.wsgi.application'
-
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = False
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
@@ -147,8 +150,8 @@ LOGOUT_REDIRECT_URL = "/"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 #
-# GDAL_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\gdal304.dll'
-# GEOS_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\geos_c.dll'
+GDAL_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\gdal304.dll'
+GEOS_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\geos_c.dll'
 
 STRIPE_SECRET_KEY = os.getenv('STRIPE_TEST_SECRET_KEY')
 STRIPE_WEBHOOK_SECRET_KEY = os.getenv('STRIPE_WEBHOOK_SECRET_KEY')

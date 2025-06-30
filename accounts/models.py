@@ -40,7 +40,8 @@ class User(AbstractUser):
 
     objects = UserManager()
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
+
+    REQUIRED_FIELDS = ['']
 
     def save(self, *args, **kwargs):
         if not self.slug:

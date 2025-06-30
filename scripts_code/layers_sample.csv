@@ -1,0 +1,5 @@
+layer_id,server,type,number,name,offsetX,offsetY,geometry_wkt
+1,1,point,1,"City Hall",153.025,-27.4688,
+2,1,polyline,2,"Main River",,,"LINESTRING(153.01 -27.50,153.03 -27.48,153.05 -27.46)"
+3,1,polygon,3,"Botanic Gardens",,,"POLYGON((153.02 -27.47,153.04 -27.47,153.04 -27.45,153.02 -27.45,153.02 -27.47))"
+4,2,point,4,"GC Station",153.428,-27.967,

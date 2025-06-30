@@ -2,6 +2,38 @@
 body{
     font-family: 'Comfortaa', sans-serif;
 }
-.navbar a {
-    color: white!important;
+.navbar {
+  background-color: #2A6F97;
+}
+.navbar .nav-link {
+  color: #F0F3BD;
+}
+.navbar .navbar-brand {
+  color: #F0F3BD;
+}
+.navbar .nav-link:hover,
+.navbar .nav-link.active {
+  background-color: #1F4E7A;
+}
+
+
+
+.site-footer {
+  background-color: #264653;
+  color: #e9f1f8;
+}
+.site-footer a {
+  color: #e76f51;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+.site-footer a:hover {
+  color: #2a9d8f;
+}
+.site-footer .bi {
+  color: #e76f51;
+  transition: transform 0.3s ease;
+}
+.site-footer .bi:hover {
+  transform: scale(1.1);
 }

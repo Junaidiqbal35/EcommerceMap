@@ -3,223 +3,2038 @@
 
 {% block content %}
 <style>
-  #map {
-    height: 600px;
-    width: 100%;
+  #map { height: 100vh; width: 100%; position: relative; background: #f0f0f0; }
+  
+  /* Modern Layer Control Panel */
+  #layerControl {
+    position: absolute;
+    top: 70px;
+    right: 20px;
+    width: 420px;
+    max-height: calc(100vh - 100px);
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    z-index: 1000;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.8);
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  #layerControl.collapsed {
+    width: 60px;
+    height: 60px;
+  }
+  
+  #layerControl.collapsed > *:not(.header) {
+    display: none;
+  }
+  
+  #layerControl.collapsed .header {
+    padding: 15px;
+  }
+  
+  #layerControl.collapsed .header-title,
+  #layerControl.collapsed .header-controls button:not(#expandBtn) {
+    display: none;
+  }
+  
+  .header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     position: relative;
+    overflow: hidden;
+  }
+  
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    animation: pulse 3s ease-in-out infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% { transform: scale(0.8); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 0.8; }
+  }
+  
+  .header-title {
+    font-size: 18px;
+    font-weight: 600;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .header-controls {
+    display: flex;
+    gap: 8px;
     z-index: 1;
   }
-  #sidebar {
-    position: absolute;
-    top: 60px; 
-    left: 0;
-    width: 280px;
-    max-height: calc(100% - 80px);
-    background: #222;
-    color: #ccc;
-    padding: 15px;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.5);
-    transform: translateX(-100%); /* hidden by default */
-    transition: transform 0.3s ease-in-out;
-    overflow-y: auto;
-    z-index: 1000;
-  }
-  #sidebar.active {
-    transform: translateX(0); /* show sidebar */
-  }
-  #sidebar h4 {
-    margin-top: 0;
-    color: #fff;
-  }
-  #sidebar .btn-close {
-    background: none;
+  
+  .icon-btn {
+    background: rgba(255,255,255,0.2);
     border: none;
-    color: #fff;
-    font-size: 1.2rem;
-    float: right;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 16px;
+  }
+  
+  .icon-btn:hover {
+    background: rgba(255,255,255,0.3);
+    transform: translateY(-2px);
+  }
+  
+  .search-section {
+    padding: 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+  }
+  
+  .search-input {
+    width: 100%;
+    padding: 12px 16px;
+    padding-left: 40px;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    font-size: 14px;
+    transition: all 0.3s;
+    background: white;
+  }
+  
+  .search-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+  
+  .search-icon {
+    position: absolute;
+    left: 32px;
+    top: 32px;
+    color: #6c757d;
+    pointer-events: none;
+  }
+  
+  .filter-pills {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  
+  .pill {
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: 2px solid #e9ecef;
+    background: white;
+    color: #495057;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+  
+  .pill:hover {
+    border-color: #667eea;
+    color: #667eea;
+    transform: translateY(-1px);
+  }
+  
+  .pill.active {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+  }
+  
+  .layer-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    min-height: 200px;
+  }
+  
+  .layer-list::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  .layer-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+  
+  .layer-list::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 10px;
+  }
+  
+  .layer-list::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+  }
+  
+  .server-section {
+    margin-bottom: 20px;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+    overflow: hidden;
+    transition: all 0.3s;
+  }
+  
+  .server-section:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  
+  .server-header {
+    padding: 15px;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  
+  .server-header:hover {
+    background: #e9ecef;
+  }
+  
+  .server-name {
+    font-weight: 600;
+    color: #2d3748;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .server-badge {
+    background: #667eea;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  
+  .server-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  .toggle-all-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1px solid #667eea;
+    background: white;
+    color: #667eea;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .toggle-all-btn:hover {
+    background: #667eea;
+    color: white;
+  }
+  
+  .zoom-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1px solid #10b981;
+    background: white;
+    color: #10b981;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  
+  .zoom-btn:hover {
+    background: #10b981;
+    color: white;
+  }
+  
+  .layer-grid {
+    padding: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  
+  .layer-grid.collapsed {
+    display: none;
+  }
+  
+  .layer-item {
+    padding: 12px;
+    margin: 5px;
+    border-radius: 10px;
+    background: #f8f9fa;
+    border: 2px solid transparent;
+    transition: all 0.3s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .layer-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: transparent;
+    transition: all 0.3s;
+  }
+  
+  .layer-item:hover {
+    background: white;
+    border-color: #e9ecef;
+    transform: translateX(4px);
+  }
+  
+  .layer-item.active {
+    background: #e7f3ff;
+    border-color: #667eea;
+  }
+  
+  .layer-item.active::before {
+    background: #667eea;
+  }
+  
+  .layer-item.loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  
+  .layer-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .layer-checkbox {
+    width: 20px;
+    height: 20px;
+    accent-color: #667eea;
     cursor: pointer;
   }
-  .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-    background: #222 !important;
-    color: #fff !important;
+  
+  .layer-info {
+    flex: 1;
+  }
+  
+  .layer-name {
+    font-weight: 500;
+    color: #2d3748;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .layer-meta {
+    font-size: 12px;
+    color: #718096;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .layer-actions {
+    display: flex;
+    gap: 5px;
+    margin-left: auto;
+  }
+  
+  .layer-zoom-btn {
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #10b981;
+    background: white;
+    color: #10b981;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .layer-zoom-btn:hover {
+    background: #10b981;
+    color: white;
+  }
+  
+  .layer-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  
+  .type-point { background: #fee2e2; color: #dc2626; }
+  .type-polyline { background: #dbeafe; color: #2563eb; }
+  .type-polygon { background: #d1fae5; color: #059669; }
+  
+  .status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  
+  .status-active { background: #10b981; }
+  .status-intermittent { background: #f59e0b; }
+  .status-inactive { background: #ef4444; }
+  .status-unknown { background: #6b7280; }
+  
+  .feature-counter {
+    background: #667eea;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    animation: fadeIn 0.3s;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  
+  .stats-bar {
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: #718096;
+  }
+  
+  .stats-info {
+    display: flex;
+    gap: 15px;
+  }
+  
+  .stat-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  
+  .stat-value {
+    font-weight: 600;
+    color: #2d3748;
+  }
+  
+  /* Enhanced Coverage Area Styles with Modern Effects */
+  .coverage-overlay {
+    fill-opacity: 0.02;
+    stroke-width: 2;
+    stroke-opacity: 0.4;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .coverage-overlay:hover {
+    fill-opacity: 0.08;
+    stroke-width: 3;
+    stroke-opacity: 0.8;
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+  
+  .coverage-overlay.highlighted {
+    fill-opacity: 0.15;
+    stroke-width: 4;
+    stroke-opacity: 1;
+    animation: modernPulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes modernPulse {
+    0% { 
+      stroke-width: 4px;
+      filter: drop-shadow(0 0 10px currentColor) brightness(1);
+    }
+    50% { 
+      stroke-width: 6px;
+      filter: drop-shadow(0 0 30px currentColor) brightness(1.2);
+    }
+    100% { 
+      stroke-width: 4px;
+      filter: drop-shadow(0 0 10px currentColor) brightness(1);
+    }
+  }
+  
+  .coverage-overlay.active {
+    fill-opacity: 0.2;
+    stroke-width: 4;
+    stroke-dasharray: 15, 5;
+    animation: flowingDash 30s linear infinite, breathe 3s ease-in-out infinite;
+  }
+  
+  @keyframes flowingDash {
+    to { stroke-dashoffset: -200; }
+  }
+  
+  @keyframes breathe {
+    0%, 100% { 
+      fill-opacity: 0.2;
+      filter: drop-shadow(0 0 15px currentColor) brightness(1);
+    }
+    50% { 
+      fill-opacity: 0.3;
+      filter: drop-shadow(0 0 25px currentColor) brightness(1.1);
+    }
+  }
+  
+  /* Coverage Label */
+  .coverage-label {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    border: 2px solid;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  
+  /* Custom Popup Styles */
+  .custom-popup .leaflet-popup-content-wrapper {
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.8);
+    padding: 0;
+  }
+  
+  .custom-popup .leaflet-popup-content {
+    margin: 0;
+    min-width: 280px;
+  }
+  
+  .custom-popup .leaflet-popup-tip {
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+  }
+  
+  .popup-header {
+    padding: 20px 20px 15px 20px;
+    border-bottom: 1px solid #e9ecef;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .popup-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--popup-color) 0%, var(--popup-color-light) 100%);
+  }
+  
+  .popup-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1a202c;
+    margin: 0 0 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .popup-subtitle {
+    font-size: 14px;
+    color: #718096;
+    margin: 0;
+  }
+  
+  .popup-content {
+    padding: 15px 20px;
+  }
+  
+  .popup-stats {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+  }
+  
+  .popup-stat {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    background: #f7fafc;
+    border-radius: 8px;
+  }
+  
+  .popup-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--popup-color);
+    display: block;
+  }
+  
+  .popup-stat-label {
+    font-size: 12px;
+    color: #718096;
+    margin-top: 2px;
+  }
+  
+  .popup-coverage {
+    background: #edf2f7;
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    font-size: 13px;
+    color: #4a5568;
+  }
+  
+  .popup-coverage-icon {
+    color: var(--popup-color);
+    margin-right: 5px;
+  }
+  
+  .popup-actions {
+    display: flex;
+    gap: 10px;
+    padding: 15px 20px;
+    background: #f7fafc;
+    border-top: 1px solid #e9ecef;
+    border-radius: 0 0 16px 16px;
+  }
+  
+  .popup-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  
+  .popup-btn-primary {
+    background: var(--popup-color);
+    color: white;
+  }
+  
+  .popup-btn-primary:hover {
+    background: var(--popup-color-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  }
+  
+  .popup-btn-secondary {
+    background: white;
+    color: var(--popup-color);
+    border: 2px solid var(--popup-color);
+  }
+  
+  .popup-btn-secondary:hover {
+    background: var(--popup-color);
+    color: white;
+    transform: translateY(-1px);
+  }
+  
+  /* Action Toast Notification */
+  .action-toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: white;
+    padding: 20px 24px;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    z-index: 2000;
+    max-width: 500px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    border-left: 4px solid #f59e0b;
+  }
+  
+  .action-toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  
+  .toast-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+  }
+  
+  .toast-content {
+    flex: 1;
+  }
+  
+  .toast-title {
+    font-weight: 600;
+    color: #1a202c;
+    margin: 0 0 4px 0;
+    font-size: 16px;
+  }
+  
+  .toast-message {
+    color: #718096;
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  
+  .toast-actions {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .toast-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .toast-btn-primary {
+    background: #f59e0b;
+    color: white;
+  }
+  
+  .toast-btn-primary:hover {
+    background: #d97706;
+  }
+  
+  .toast-btn-secondary {
+    background: #e5e7eb;
+    color: #374151;
+  }
+  
+  .toast-btn-secondary:hover {
+    background: #d1d5db;
+  }
+  
+  .toast-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+  
+  .toast-close:hover {
+    background: #f3f4f6;
+    color: #4b5563;
+  }
+  
+  /* Download Panel */
+  #downloadPanel {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.98);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    z-index: 999;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.8);
+    min-width: 300px;
+  }
+  
+  .download-header {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .srid-select {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 15px;
+    background: white;
+  }
+  
+  .download-btn {
+    width: 100%;
+    padding: 12px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  .download-btn:hover:not(:disabled) {
+    background: #059669;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  }
+  
+  .download-btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+  }
+  
+  .download-info {
+    margin-top: 12px;
+    padding: 12px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    font-size: 13px;
+    text-align: center;
+  }
+  
+  /* Area Alert Modal */
+  .area-alert {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 30px;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    z-index: 2000;
+    max-width: 500px;
+    text-align: center;
+    display: none;
+  }
+  
+  .area-alert.show {
+    display: block;
+    animation: slideIn 0.3s ease-out;
+  }
+  
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -60%);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%);
+    }
+  }
+  
+  .area-alert h3 {
+    margin: 0 0 15px 0;
+    color: #f59e0b;
+    font-size: 24px;
+  }
+  
+  .area-alert p {
+    margin: 0 0 20px 0;
+    color: #4b5563;
+    line-height: 1.6;
+  }
+  
+  .area-alert-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  
+  .area-alert button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .area-alert .zoom-btn {
+    background: #10b981;
+    color: white;
+  }
+  
+  .area-alert .cancel-btn {
+    background: #e5e7eb;
+    color: #374151;
+  }
+  
+  /* Overlay */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1999;
+    display: none;
+  }
+  
+  .modal-overlay.show {
+    display: block;
+  }
+  
+  /* Nearby Layers Sidebar */
+  #sidebar {
+    position: absolute;
+    top: 70px;
+    left: 20px;
+    width: 350px;
+    max-height: calc(100vh - 100px);
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.8);
+    transform: translateX(-120%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+  }
+  
+  #sidebar.active {
+    transform: translateX(0);
+  }
+  
+  .sidebar-header {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .sidebar-content {
+    padding: 20px;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+  }
+  
+  .nearby-layer-item {
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    transition: all 0.3s;
+  }
+  
+  .nearby-layer-item:hover {
+    background: white;
+    border-color: #10b981;
+  }
+  
+  /* Loading States */
+  .skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+  }
+  
+  @keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    #layerControl, #sidebar {
+      width: calc(100vw - 40px);
+      left: 20px;
+      right: 20px;
+    }
   }
 </style>
 
+<!-- Action Toast Notification -->
+<div class="action-toast" id="actionToast">
+  <div class="toast-icon">⚠️</div>
+  <div class="toast-content">
+    <h4 class="toast-title">Large Area Selected</h4>
+    <p class="toast-message">The current view spans a large region and may affect performance. Zoom in to focus on the area you're interested in.</p>
+    <div class="toast-actions">
+      <button class="toast-btn toast-btn-primary" onclick="gisMap.smartZoomIn()">
+        🔍 Zoom In Now
+      </button>
+      <button class="toast-btn toast-btn-secondary" onclick="gisMap.dismissToast()">
+        Continue Anyway
+      </button>
+    </div>
+  </div>
+  <button class="toast-close" onclick="gisMap.dismissToast()">×</button>
+</div>
+
+<!-- Area Alert Modal -->
+<div class="modal-overlay" id="modalOverlay"></div>
+<div class="area-alert" id="areaAlert">
+  <h3>⚠️ Large Area Selected</h3>
+  <p>The selected area is too large to download. This would include <span id="alertFeatureCount">many</span> features and may fail.</p>
+  <p>Please zoom in to a smaller area or select specific layers to download.</p>
+  <div class="area-alert-buttons">
+    <button class="zoom-btn" onclick="gisMap.zoomToRecommendedLevel()">Zoom In Automatically</button>
+    <button class="cancel-btn" onclick="gisMap.closeAreaAlert()">Cancel</button>
+  </div>
+</div>
+
+<!-- Layer Control Panel -->
+<div id="layerControl">
+  <div class="header">
+    <div class="header-title">
+      <span>🗺️</span>
+      <span>Layer Control</span>
+    </div>
+    <div class="header-controls">
+      <button class="icon-btn" id="refreshBtn" title="Refresh layers">🔄</button>
+      <button class="icon-btn" id="collapseBtn" title="Collapse panel">−</button>
+      <button class="icon-btn" id="expandBtn" style="display:none" title="Expand panel">+</button>
+    </div>
+  </div>
+  
+  <div class="search-section">
+    <div style="position: relative;">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" class="search-input" placeholder="Search layers...">
+    </div>
+    <div class="filter-pills">
+      <button class="pill active" data-filter="all">All</button>
+      <button class="pill" data-filter="point">📍 Points</button>
+      <button class="pill" data-filter="polyline">📏 Lines</button>
+      <button class="pill" data-filter="polygon">🏗️ Polygons</button>
+    </div>
+  </div>
+  
+  <div class="layer-list" id="layerList">
+    <div style="text-align: center; padding: 40px;">
+      <div class="skeleton" style="height: 20px; width: 60%; margin: 0 auto 10px;"></div>
+      <div class="skeleton" style="height: 20px; width: 40%; margin: 0 auto;"></div>
+    </div>
+  </div>
+  
+  <div class="stats-bar">
+    <div class="stats-info">
+      <div class="stat-item">
+        <span>Layers:</span>
+        <span class="stat-value" id="totalLayers">0</span>
+      </div>
+      <div class="stat-item">
+        <span>Active:</span>
+        <span class="stat-value" id="activeLayers">0</span>
+      </div>
+    </div>
+    <div class="stat-item">
+      <span>💰 Cost:</span>
+      <span class="stat-value" id="connectsCost">0</span>
+    </div>
+  </div>
+</div>
+
+<!-- Download Panel -->
+<div id="downloadPanel">
+  <div class="download-header">
+    <span>📥</span>
+    <span>Export Settings</span>
+  </div>
+  
+  <select id="sridSelect" class="srid-select">
+    <option value="28356">GDA94 / MGA Zone 56</option>
+    <option value="28355">GDA94 / MGA Zone 55</option>
+    <option value="28354">GDA94 / MGA Zone 54</option>
+    <option value="4326">WGS 84 (GPS)</option>
+    <option value="3857">Web Mercator</option>
+  </select>
+  
+  <button id="downloadBtn" class="download-btn" disabled>
+    <span>💾</span>
+    <span>Download Selected Layers</span>
+  </button>
+  
+  <div class="download-info" id="downloadInfo">
+    Select layers to enable download
+  </div>
+</div>
+
+<!-- Nearby Layers Sidebar -->
 <div id="sidebar">
-  <button class="btn-close" id="closeSidebar">&times;</button>
-  <h4>Nearby Layers</h4>
-  <form id="nearbyLayerForm">
-    <div id="layerListContainer"></div>
-    <p id="connectsInfo" style="font-size: 0.9rem; color: #aaa;"></p>
-    <button type="submit" class="btn btn-sm btn-primary mt-3">
-      Download Selected
-    </button>
-  </form>
+  <div class="sidebar-header">
+    <h5 style="margin: 0;">📍 Nearby Layers</h5>
+    <button class="icon-btn" id="closeSidebar" style="background: rgba(255,255,255,0.2);">×</button>
+  </div>
+  <div class="sidebar-content">
+    <form id="nearbyForm">
+      <div id="nearbyList"></div>
+      <button type="submit" class="download-btn" style="margin-top: 20px;">
+        Download Selected
+      </button>
+    </form>
+  </div>
 </div>
 
 <div id="map"></div>
-{% endblock content %}
+{% endblock %}
 
 {% block extrascript %}
-<!-- If you want to use leaflet.markercluster -->
-<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"
-/>
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"
-/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-hash"></script>
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-  const map = L.map("map").setView([-27.4698, 153.0251], 10);
-     L.hash(map);
-      L.Control.geocoder().addTo(map);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '© OpenStreetMap contributors'
-  }).addTo(map);
+// Color palette for different servers/layers
+const colorPalette = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57',
+  '#48DBFB', '#FF9FF3', '#54A0FF', '#FD79A8', '#A29BFE',
+  '#6C5CE7', '#00D2D3', '#EE5A24', '#F368E0', '#01A3A4'
+];
 
-  // For clustering many point markers:
-  const markers = L.markerClusterGroup();
-  map.addLayer(markers);
-
-  // Simple fetch utility
-  async function fetchData(url) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (err) {
-      console.error("Fetch error:", err);
-      return null;
-    }
-  }
+class GISMapController {
+  constructor() {
+    this.map = null;
+    this.layers = [];
+    this.activeLayers = {};
+    this.serverCoverages = {};
+    this.highlightedCoverage = null;
+    this.coverageLabels = {};
+    this.filters = { search: '', type: 'all' };
+    this.colorMap = {};
+    this.maxDownloadArea = 0.1; // ~10km x 10km
+    this.toastTimeout = null;
     
-  async function loadMarkers() {
-    const data = await fetchData("/map-layers/");
-    if (!data) return;
-    markers.clearLayers();
-
-    data.forEach(l => {
-      const marker = L.marker([l.lat, l.lng]);
-      // We add a "Nearby Layers" button in the popup
-      marker.bindPopup(`
-        <b>${l.name}</b> [${l.type}]<br/>
-        <button class="btn btn-sm btn-primary" id="openNearbyBtn"
-          data-lat="${l.lat}" data-lng="${l.lng}">
-          Nearby Layers
-        </button>
-      `);
+    this.initMap();
+    this.initControls();
+    this.loadData();
+  }
   
-      marker.on("popupopen", () => {
-        setTimeout(() => {
-          const openBtn = document.getElementById("openNearbyBtn");
-          if (openBtn) {
-            openBtn.addEventListener("click", () => {
-              showSidebar(openBtn.dataset.lat, openBtn.dataset.lng);
-            });
-          }
-        }, 100);
+  initMap() {
+    this.map = L.map('map').setView([-27.47, 153.02], 10);
+    
+    // Add base layer with better styling
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors, © CARTO'
+    }).addTo(this.map);
+    
+    // Add map controls
+    L.hash(this.map);
+    L.Control.geocoder().addTo(this.map);
+    
+    // Create layer groups
+    this.coverageGroup = L.layerGroup().addTo(this.map);
+    this.previewGroup = L.layerGroup().addTo(this.map);
+    this.labelGroup = L.layerGroup().addTo(this.map);
+    
+    // Map events
+    this.map.on('click', (e) => this.handleMapClick(e));
+    this.map.on('moveend', () => this.updateVisibleLayers());
+    this.map.on('zoomend moveend', () => this.checkDownloadArea());
+  }
+  
+  initControls() {
+    // Layer panel controls
+    document.getElementById('collapseBtn').addEventListener('click', () => {
+      document.getElementById('layerControl').classList.add('collapsed');
+      document.getElementById('expandBtn').style.display = 'block';
+    });
+    
+    document.getElementById('expandBtn').addEventListener('click', () => {
+      document.getElementById('layerControl').classList.remove('collapsed');
+      document.getElementById('expandBtn').style.display = 'none';
+    });
+    
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      this.loadData();
+    });
+    
+    // Search
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      this.filters.search = e.target.value.toLowerCase();
+      this.renderLayers();
+    });
+    
+    // Filter pills
+    document.querySelectorAll('.pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        this.filters.type = pill.dataset.filter;
+        this.renderLayers();
       });
-      markers.addLayer(marker);
+    });
+    
+    // Download button
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      this.downloadLayers();
+    });
+    
+    // Sidebar close
+    document.getElementById('closeSidebar').addEventListener('click', () => {
+      document.getElementById('sidebar').classList.remove('active');
+    });
+    
+    // Nearby form
+    document.getElementById('nearbyForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.downloadNearbyLayers();
     });
   }
-  loadMarkers();
-
-  // 2) The sidebar logic
-  const sidebar = document.getElementById("sidebar");
-  const closeSidebarBtn = document.getElementById("closeSidebar");
-  const layerListContainer = document.getElementById("layerListContainer");
-  const connectsInfo = document.getElementById("connectsInfo");
-  let clickedLat = null;
-  let clickedLng = null;
-
-
-  closeSidebarBtn.addEventListener("click", () => {
-    sidebar.classList.remove("active");
-  });
-
-
-  async function showSidebar(lat, lng) {
-     clickedLat = parseFloat(lat);  
-     clickedLng = parseFloat(lng);  
-    sidebar.classList.add("active");
-    layerListContainer.innerHTML = "<em>Loading nearby layers...</em>";
-    connectsInfo.textContent = "";
-
-    // e.g. 500 meter search radius
-    const dist = 500;
-    const data = await fetchData(`/nearby-layers/?lat=${lat}&lng=${lng}&dist=${dist}`);
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      layerListContainer.innerHTML = "<em>No layers found within range.</em>";
-      return;
+  
+  async loadData() {
+    this.showLoading();
+    
+    try {
+      // Loading server coverage areas
+      const coverageResponse = await fetch('/server-coverage/');
+      const servers = await coverageResponse.json();
+      this.renderServerCoverages(servers);
+      
+      // Load all layers
+      const layersResponse = await fetch('/all-layers/');
+      this.layers = await layersResponse.json();
+      
+      // Assign colors to servers
+      const serverNames = [...new Set(this.layers.map(l => l.server_name))];
+      serverNames.forEach((name, i) => {
+        this.colorMap[name] = colorPalette[i % colorPalette.length];
+      });
+      
+      this.renderLayers();
+      this.updateStats();
+      
+    } catch (error) {
+      console.error('Failed to load data:', error);
+      this.showError();
     }
-      // Render checkboxes
-    let html = "";
-    data.forEach(d => {
-      html += `
-        <div>
-          <input type="checkbox" name="layer_ids" value="${d.id}" checked />
-          <label>${d.name} [${d.type}] ~ ${d.distance_m}m away</label>
+  }
+  
+  renderServerCoverages(servers) {
+    this.coverageGroup.clearLayers();
+    this.labelGroup.clearLayers();
+    
+    servers.forEach((server, index) => {
+      if (!server.extent) return;
+      
+      const bounds = [
+        [server.extent.min_y, server.extent.min_x],
+        [server.extent.max_y, server.extent.max_x]
+      ];
+      
+      const color = colorPalette[index % colorPalette.length];
+      
+      // Create coverage rectangle with enhanced styling
+      const coverage = L.rectangle(bounds, {
+        color: color,
+        weight: 2,
+        opacity: 0.8,
+        fillColor: color,
+        fillOpacity: 0.1,
+        className: 'coverage-overlay'
+      });
+      
+      // Create custom popup with branding
+      const popupContent = this.createCustomPopup(server, color);
+      coverage.bindPopup(popupContent, {
+        className: 'custom-popup',
+        maxWidth: 350,
+        autoPan: true,
+        autoPanPadding: [50, 50]
+      });
+      
+      // Store reference
+      this.serverCoverages[server.name] = {
+        coverage: coverage,
+        bounds: bounds,
+        color: color,
+        center: L.latLngBounds(bounds).getCenter()
+      };
+      
+      coverage.addTo(this.coverageGroup);
+    });
+  }
+  
+  createCustomPopup(server, color) {
+    const regionName = this.getRegionName(server.extent);
+    const coverageArea = this.calculateCoverageArea(server.extent);
+    
+    return `
+      <div style="--popup-color: ${color}; --popup-color-light: ${color}44; --popup-color-dark: ${color}dd;">
+        <div class="popup-header">
+          <h3 class="popup-title">
+            <span style="color: ${color};">●</span>
+            ${server.name}
+          </h3>
+          <p class="popup-subtitle">GIS Data Provider</p>
+        </div>
+        <div class="popup-content">
+          <div class="popup-stats">
+            <div class="popup-stat">
+              <span class="popup-stat-value">${server.layer_count}</span>
+              <span class="popup-stat-label">Layers</span>
+            </div>
+            <div class="popup-stat">
+              <span class="popup-stat-value">${coverageArea}</span>
+              <span class="popup-stat-label">Coverage</span>
+            </div>
+          </div>
+          <div class="popup-coverage">
+            <span class="popup-coverage-icon">📍</span>
+            <strong>Region:</strong> ${regionName}
+          </div>
+        </div>
+        <div class="popup-actions">
+          <button class="popup-btn popup-btn-primary" onclick="gisMap.showLayersForServer('${server.name}')">
+            <span>📋</span>
+            <span>View Layers</span>
+          </button>
+          <button class="popup-btn popup-btn-secondary" onclick="gisMap.zoomToServerSmooth('${server.name}')">
+            <span>🎯</span>
+            <span>Zoom Here</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+  
+  getRegionName(extent) {
+    // Convert coordinates to human-readable region names
+    const lat = (extent.min_y + extent.max_y) / 2;
+    const lng = (extent.min_x + extent.max_x) / 2;
+    
+    // Australian regions (customize based on your data)
+    if (lat > -20 && lng > 145) return "North Queensland";
+    if (lat > -25 && lat <= -20 && lng > 145) return "Central Queensland";
+    if (lat > -28 && lat <= -25 && lng > 150) return "Southeast Queensland";
+    if (lat < -31 && lng > 150) return "New South Wales";
+    if (lat < -35 && lng < 145) return "Victoria";
+    if (lat < -30 && lng < 135) return "South Australia";
+    if (lat > -35 && lng < 125) return "Western Australia";
+    if (lat < -40) return "Tasmania";
+    
+    // Default to coordinate-based description
+    return `${Math.abs(lat).toFixed(1)}°${lat < 0 ? 'S' : 'N'}, ${Math.abs(lng).toFixed(1)}°${lng < 0 ? 'W' : 'E'}`;
+  }
+  
+  calculateCoverageArea(extent) {
+    const width = Math.abs(extent.max_x - extent.min_x);
+    const height = Math.abs(extent.max_y - extent.min_y);
+    const area = width * height;
+    
+    if (area > 100) return "Large";
+    if (area > 10) return "Regional";
+    if (area > 1) return "Local";
+    return "Small";
+  }
+  
+  formatBounds(bounds) {
+    const [sw, ne] = bounds;
+    return `${sw[0].toFixed(2)}°, ${sw[1].toFixed(2)}° to ${ne[0].toFixed(2)}°, ${ne[1].toFixed(2)}°`;
+  }
+  
+  showLayersForServer(serverName) {
+    document.getElementById('searchInput').value = serverName;
+    this.filters.search = serverName.toLowerCase();
+    this.renderLayers();
+    document.getElementById('layerControl').classList.remove('collapsed');
+    
+    // Close popup
+    this.map.closePopup();
+  }
+  
+  zoomToServer(serverName) {
+    const serverData = this.serverCoverages[serverName];
+    if (serverData && serverData.bounds) {
+      this.map.fitBounds(serverData.bounds, { padding: [50, 50] });
+      this.highlightServerCoverage(serverName);
+    }
+  }
+  
+  zoomToServerSmooth(serverName) {
+    const serverData = this.serverCoverages[serverName];
+    if (serverData && serverData.bounds) {
+      // Close popup first
+      this.map.closePopup();
+      
+      // Smooth fly-to animation
+      this.map.flyToBounds(serverData.bounds, {
+        padding: [80, 80],
+        duration: 1.5,
+        easeLinearity: 0.25
+      });
+      
+      // Highlight after animation starts
+      setTimeout(() => {
+        this.highlightServerCoverage(serverName);
+      }, 300);
+    }
+  }
+  
+  highlightServerCoverage(serverName) {
+    // Remove previous highlight
+    if (this.highlightedCoverage) {
+      this.highlightedCoverage.coverage.getElement()?.classList.remove('highlighted');
+      this.removeHighlightLabel(this.highlightedCoverage.name);
+    }
+    
+    const serverData = this.serverCoverages[serverName];
+    if (serverData) {
+      serverData.coverage.getElement()?.classList.add('highlighted');
+      this.highlightedCoverage = { ...serverData, name: serverName };
+      
+      // Add floating label
+      this.addHighlightLabel(serverName, serverData);
+      
+      // Remove highlight after 5 seconds
+      setTimeout(() => {
+        serverData.coverage.getElement()?.classList.remove('highlighted');
+        this.removeHighlightLabel(serverName);
+        if (this.highlightedCoverage?.name === serverName) {
+          this.highlightedCoverage = null;
+        }
+      }, 5000);
+    }
+  }
+  
+  addHighlightLabel(serverName, serverData) {
+    const label = L.divIcon({
+      className: 'coverage-label',
+      html: `<div style="border-color: ${serverData.color}; color: ${serverData.color};">
+        ${serverName} Coverage Area
+      </div>`,
+      iconSize: null
+    });
+    
+    const marker = L.marker(serverData.center, { icon: label });
+    this.coverageLabels[serverName] = marker;
+    marker.addTo(this.labelGroup);
+  }
+  
+  removeHighlightLabel(serverName) {
+    if (this.coverageLabels[serverName]) {
+      this.labelGroup.removeLayer(this.coverageLabels[serverName]);
+      delete this.coverageLabels[serverName];
+    }
+  }
+  
+  checkDownloadArea() {
+    const bounds = this.map.getBounds();
+    const area = (bounds.getEast() - bounds.getWest()) * (bounds.getNorth() - bounds.getSouth());
+    
+    // Only show toast if layers are selected
+    const activeCount = Object.keys(this.activeLayers).length;
+    if (activeCount > 0 && area > this.maxDownloadArea) {
+      this.showActionToast();
+    } else {
+      this.dismissToast();
+    }
+  }
+  
+  showActionToast() {
+    clearTimeout(this.toastTimeout);
+    const toast = document.getElementById('actionToast');
+    toast.classList.add('show');
+    
+    // Auto-dismiss after 10 seconds
+    this.toastTimeout = setTimeout(() => {
+      this.dismissToast();
+    }, 10000);
+  }
+  
+  dismissToast() {
+    const toast = document.getElementById('actionToast');
+    toast.classList.remove('show');
+    clearTimeout(this.toastTimeout);
+  }
+  
+  smartZoomIn() {
+    const currentZoom = this.map.getZoom();
+    const recommendedZoom = Math.min(currentZoom + 2, 16);
+    this.map.flyTo(this.map.getCenter(), recommendedZoom, {
+      duration: 1,
+      easeLinearity: 0.25
+    });
+    this.dismissToast();
+  }
+  
+  renderLayers() {
+    const filtered = this.getFilteredLayers();
+    const grouped = this.groupByServer(filtered);
+    const container = document.getElementById('layerList');
+    
+    if (!filtered.length) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #718096;">
+          <div style="font-size: 48px; margin-bottom: 10px;">🔍</div>
+          <div>No layers found</div>
         </div>
       `;
-    });
-    layerListContainer.innerHTML = html;
-
-    // Listen for changes, update "connects" count
-    updateConnectsInfo();
-    layerListContainer.addEventListener("change", updateConnectsInfo);
-  }
-
-  function updateConnectsInfo() {
-    const checked = layerListContainer.querySelectorAll('input[name="layer_ids"]:checked');
-    connectsInfo.textContent = checked.length > 0
-      ? `Will cost ${checked.length} connects.`
-      : "No layers selected.";
-  }
-
-
-  document.getElementById("nearbyLayerForm").addEventListener("submit", async function(e) {
-    e.preventDefault();
-    const checks = layerListContainer.querySelectorAll('input[name="layer_ids"]:checked');
-    if (checks.length === 0) {
-      alert("Select at least one layer");
       return;
     }
-    const formData = new FormData();
-    checks.forEach(c => formData.append("layer_ids[]", c.value));
-    formData.append("lat", clickedLat);
-    formData.append("lng", clickedLng);
-    formData.append("zoom", map.getZoom());
-
-    try {
-      const resp = await fetch("/export-dxf-multi/", {
-        method: "POST",
-        body: formData
+    
+    let html = '';
+    Object.entries(grouped).forEach(([serverName, layers]) => {
+      const serverColor = this.colorMap[serverName];
+      const isCollapsed = this.isServerCollapsed(serverName);
+      
+      html += `
+        <div class="server-section" data-server="${serverName}">
+          <div class="server-header" onclick="gisMap.toggleServer('${serverName}')">
+            <div class="server-name">
+              <span style="color: ${serverColor};">●</span>
+              <span>${serverName}</span>
+              <span class="server-badge">${layers.length}</span>
+            </div>
+            <div class="server-actions">
+              <button class="zoom-btn" onclick="event.stopPropagation(); gisMap.zoomToServerSmooth('${serverName}')">
+                🔍 Zoom
+              </button>
+              <button class="toggle-all-btn" onclick="event.stopPropagation(); gisMap.toggleAllInServer('${serverName}')">
+                Toggle All
+              </button>
+              <span style="font-size: 12px;">${isCollapsed ? '▶' : '▼'}</span>
+            </div>
+          </div>
+          <div class="layer-grid ${isCollapsed ? 'collapsed' : ''}">
+      `;
+      
+      layers.forEach(layer => {
+        const isActive = this.activeLayers[layer.id];
+        const typeIcon = this.getTypeIcon(layer.type);
+        const statusClass = `status-${layer.status || 'unknown'}`;
+        
+        html += `
+          <div class="layer-item ${isActive ? 'active' : ''}" data-layer-id="${layer.id}">
+            <div class="layer-content">
+              <input type="checkbox" 
+                     class="layer-checkbox" 
+                     id="layer-${layer.id}"
+                     ${isActive ? 'checked' : ''}
+                     ${layer.status === 'inactive' ? 'disabled' : ''}
+                     onchange="gisMap.toggleLayer(${layer.id})">
+              <div class="layer-info">
+                <label for="layer-${layer.id}" class="layer-name">
+                  ${layer.name}
+                  <span class="status-indicator ${statusClass}"></span>
+                </label>
+                <div class="layer-meta">
+                  <span class="layer-type-badge type-${layer.type}">
+                    ${typeIcon} ${layer.type}
+                  </span>
+                  <span>Layer #${layer.number}</span>
+                  ${isActive ? `<span class="feature-counter" id="count-${layer.id}">...</span>` : ''}
+                </div>
+              </div>
+              <div class="layer-actions">
+                ${layer.centroid_lat && layer.centroid_lng ? `
+                  <button class="layer-zoom-btn" onclick="gisMap.zoomToLayer(${layer.id})">
+                    🔍 Zoom
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `;
       });
-      if (!resp.ok) {
-        const err = await resp.json();
-        alert(err.error || "Download error");
+      
+      html += '</div></div>';
+    });
+    
+    container.innerHTML = html;
+  }
+  
+  getFilteredLayers() {
+    return this.layers.filter(layer => {
+      if (this.filters.search) {
+        const search = this.filters.search;
+        if (!layer.name.toLowerCase().includes(search) &&
+            !layer.server_name.toLowerCase().includes(search) &&
+            !layer.type.includes(search)) {
+          return false;
+        }
+      }
+      
+      if (this.filters.type !== 'all' && layer.type !== this.filters.type) {
+        return false;
+      }
+      
+      return true;
+    });
+  }
+  
+  groupByServer(layers) {
+    const grouped = {};
+    layers.forEach(layer => {
+      const server = layer.server_name || 'Unknown';
+      if (!grouped[server]) grouped[server] = [];
+      grouped[server].push(layer);
+    });
+    return grouped;
+  }
+  
+  getTypeIcon(type) {
+    const icons = {
+      'point': '📍',
+      'polyline': '📏',
+      'polygon': '🏗️'
+    };
+    return icons[type] || '📄';
+  }
+  
+  isServerCollapsed(serverName) {
+    return localStorage.getItem(`server-collapsed-${serverName}`) === 'true';
+  }
+  
+  toggleServer(serverName) {
+    const isCollapsed = this.isServerCollapsed(serverName);
+    localStorage.setItem(`server-collapsed-${serverName}`, !isCollapsed);
+    
+    const grid = document.querySelector(`.server-section[data-server="${serverName}"] .layer-grid`);
+    if (grid) {
+      grid.classList.toggle('collapsed');
+    }
+  }
+  
+  toggleAllInServer(serverName) {
+    const checkboxes = document.querySelectorAll(
+      `.server-section[data-server="${serverName}"] .layer-checkbox:not(:disabled)`
+    );
+    
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    
+    checkboxes.forEach(cb => {
+      cb.checked = !allChecked;
+      const layerId = parseInt(cb.id.replace('layer-', ''));
+      this.toggleLayer(layerId);
+    });
+  }
+  
+  zoomToLayer(layerId) {
+    const layer = this.layers.find(l => l.id === layerId);
+    if (!layer) return;
+    
+    if (layer.centroid_lat && layer.centroid_lng) {
+      this.map.flyTo([layer.centroid_lat, layer.centroid_lng], 16, {
+        duration: 1.2,
+        easeLinearity: 0.25
+      });
+      
+      // Highlight the server coverage
+      setTimeout(() => {
+        this.highlightServerCoverage(layer.server_name);
+      }, 300);
+      
+      // If layer not active, activate it
+      if (!this.activeLayers[layerId]) {
+        setTimeout(() => {
+          document.getElementById(`layer-${layerId}`).click();
+        }, 800);
+      }
+    }
+  }
+  
+  async toggleLayer(layerId) {
+    const layer = this.layers.find(l => l.id === layerId);
+    if (!layer) return;
+    
+    const checkbox = document.getElementById(`layer-${layerId}`);
+    const layerItem = document.querySelector(`.layer-item[data-layer-id="${layerId}"]`);
+    
+    if (checkbox.checked) {
+      layerItem.classList.add('loading');
+      await this.addLayerPreview(layer);
+      layerItem.classList.remove('loading');
+      
+      // Highlight server coverage
+      const coverage = this.serverCoverages[layer.server_name];
+      if (coverage) {
+        coverage.coverage.getElement()?.classList.add('active');
+      }
+    } else {
+      this.removeLayerPreview(layer);
+      
+      // Check if any other layers from this server are active
+      const serverHasActive = this.layers.some(l => 
+        l.server_name === layer.server_name && 
+        this.activeLayers[l.id]
+      );
+      
+      if (!serverHasActive) {
+        const coverage = this.serverCoverages[layer.server_name];
+        if (coverage) {
+          coverage.coverage.getElement()?.classList.remove('active');
+        }
+      }
+    }
+    
+    this.updateStats();
+    this.checkDownloadArea();
+  }
+  
+  async addLayerPreview(layer) {
+    try {
+      const bounds = this.map.getBounds();
+      const params = new URLSearchParams({
+        layer_id: layer.id,
+        minx: bounds.getWest(),
+        miny: bounds.getSouth(),
+        maxx: bounds.getEast(),
+        maxy: bounds.getNorth()
+      });
+      
+      const response = await fetch(`/layer-preview-features/?${params}`);
+      if (!response.ok) throw new Error('Failed to load features');
+      
+      const geojson = await response.json();
+      
+      // Style based on layer type and server
+      const color = this.colorMap[layer.server_name];
+      const geoLayer = L.geoJSON(geojson, {
+        style: {
+          color: color,
+          weight: layer.type === 'polygon' ? 2 : 3,
+          opacity: 0.8,
+          fillColor: color,
+          fillOpacity: layer.type === 'polygon' ? 0.2 : 0,
+          dashArray: layer.type === 'polyline' ? '5, 5' : null
+        },
+        pointToLayer: (feature, latlng) => {
+          return L.circleMarker(latlng, {
+            radius: 6,
+            color: color,
+            weight: 2,
+            opacity: 0.9,
+            fillOpacity: 0.7
+          });
+        },
+        onEachFeature: (feature, layer) => {
+          layer.bindPopup(`
+            <strong>${feature.properties.layer_name}</strong><br>
+            Type: ${feature.properties.layer_type}
+          `);
+        }
+      });
+      
+      geoLayer.addTo(this.previewGroup);
+      this.activeLayers[layer.id] = geoLayer;
+      
+      // Update feature count
+      const count = geojson.features ? geojson.features.length : 0;
+      const countEl = document.getElementById(`count-${layer.id}`);
+      if (countEl) {
+        countEl.textContent = `${count} features`;
+      }
+      
+    } catch (error) {
+      console.error('Failed to add layer:', error);
+      document.getElementById(`layer-${layer.id}`).checked = false;
+    }
+  }
+  
+  removeLayerPreview(layer) {
+    const geoLayer = this.activeLayers[layer.id];
+    if (geoLayer) {
+      this.previewGroup.removeLayer(geoLayer);
+      delete this.activeLayers[layer.id];
+    }
+  }
+  
+  updateVisibleLayers() {
+    // Debounced update of layer previews when map moves
+    clearTimeout(this.updateTimeout);
+    this.updateTimeout = setTimeout(() => {
+      Object.keys(this.activeLayers).forEach(layerId => {
+        const layer = this.layers.find(l => l.id == layerId);
+        if (layer) {
+          this.removeLayerPreview(layer);
+          this.addLayerPreview(layer);
+        }
+      });
+    }, 500);
+  }
+  
+  updateStats() {
+    const total = this.layers.length;
+    const active = Object.keys(this.activeLayers).length;
+    
+    document.getElementById('totalLayers').textContent = total;
+    document.getElementById('activeLayers').textContent = active;
+    document.getElementById('connectsCost').textContent = active;
+    
+    // Update download button
+    const downloadBtn = document.getElementById('downloadBtn');
+    const downloadInfo = document.getElementById('downloadInfo');
+    
+    if (active > 0) {
+      downloadBtn.disabled = false;
+      downloadInfo.innerHTML = `
+        <strong>${active}</strong> layers selected<br>
+        Cost: <strong>${active}</strong> connects
+      `;
+    } else {
+      downloadBtn.disabled = true;
+      downloadInfo.textContent = 'Select layers to enable download';
+    }
+  }
+  
+  handleMapClick(e) {
+    const { lat, lng } = e.latlng;
+    this.showNearbyLayers(lat, lng);
+  }
+  
+  async showNearbyLayers(lat, lng) {
+    const sidebar = document.getElementById('sidebar');
+    const list = document.getElementById('nearbyList');
+    
+    sidebar.classList.add('active');
+    list.innerHTML = '<div style="text-align: center;">Loading nearby layers...</div>';
+    
+    try {
+      const response = await fetch(`/nearby-layers/?lat=${lat}&lng=${lng}&dist=1000`);
+      const layers = await response.json();
+      
+      if (!layers.length) {
+        list.innerHTML = '<div style="text-align: center; color: #718096;">No layers found nearby</div>';
         return;
       }
-
-      const blob = await resp.blob();
+      
+      let html = '';
+      layers.forEach(layer => {
+        const typeIcon = this.getTypeIcon(layer.type);
+        html += `
+          <div class="nearby-layer-item">
+            <label style="display: flex; align-items: center; gap: 10px;">
+              <input type="checkbox" value="${layer.id}" checked>
+              <div style="flex: 1;">
+                <div style="font-weight: 500;">${typeIcon} ${layer.name}</div>
+                <div style="font-size: 12px; color: #718096;">
+                  ${layer.type} • ${layer.distance_m}m away
+                </div>
+              </div>
+            </label>
+          </div>
+        `;
+      });
+      
+      list.innerHTML = html;
+      
+    } catch (error) {
+      console.error('Failed to load nearby layers:', error);
+      list.innerHTML = '<div style="color: #ef4444;">Failed to load layers</div>';
+    }
+  }
+  
+  async downloadLayers() {
+    const layerIds = Object.keys(this.activeLayers);
+    if (!layerIds.length) return;
+    
+    // Check area size
+    const bounds = this.map.getBounds();
+    const area = (bounds.getEast() - bounds.getWest()) * (bounds.getNorth() - bounds.getSouth());
+    
+    // Show different UI based on area size
+    if (area > this.maxDownloadArea) {
+      // Don't block, just show the toast
+      this.showActionToast();
+    }
+    
+    const btn = document.getElementById('downloadBtn');
+    const originalText = btn.innerHTML;
+    
+    try {
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳</span><span>Downloading...</span>';
+      
+      const formData = new FormData();
+      
+      layerIds.forEach(id => formData.append('layer_ids[]', id));
+      formData.append('minx', bounds.getWest());
+      formData.append('miny', bounds.getSouth());
+      formData.append('maxx', bounds.getEast());
+      formData.append('maxy', bounds.getNorth());
+      formData.append('srid', document.getElementById('sridSelect').value);
+      
+      const response = await fetch('/export-dxf-multi/', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Download failed');
+      }
+      
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
-      a.download = "nearby_layers.dxf";
+      a.download = `gis_export_${new Date().toISOString().slice(0, 10)}.dxf`;
       a.click();
       URL.revokeObjectURL(url);
-
-   
-      sidebar.classList.remove("active");
-    } catch (err) {
-      console.error("DXF Export error:", err);
-      alert("An error occurred during the download.");
+      
+    } catch (error) {
+      if (error.message.includes('too large')) {
+        this.showAreaAlert();
+      } else {
+        alert(`Download failed: ${error.message}`);
+      }
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
     }
-  });
-});
+  }
+  
+  showAreaAlert(area) {
+    const modal = document.getElementById('areaAlert');
+    const overlay = document.getElementById('modalOverlay');
+    
+    // Estimate features
+    const estimatedFeatures = Math.round((area || 0.2) * 50000);
+    document.getElementById('alertFeatureCount').textContent = estimatedFeatures.toLocaleString();
+    
+    modal.classList.add('show');
+    overlay.classList.add('show');
+  }
+  
+  closeAreaAlert() {
+    document.getElementById('areaAlert').classList.remove('show');
+    document.getElementById('modalOverlay').classList.remove('show');
+  }
+  
+  zoomToRecommendedLevel() {
+    const currentZoom = this.map.getZoom();
+    const recommendedZoom = Math.max(currentZoom + 2, 14);
+    this.map.flyTo(this.map.getCenter(), recommendedZoom, {
+      duration: 1,
+      easeLinearity: 0.25
+    });
+    this.closeAreaAlert();
+  }
+  
+  async downloadNearbyLayers() {
+    const checkboxes = document.querySelectorAll('#nearbyList input:checked');
+    if (!checkboxes.length) return;
+    
+    const btn = document.querySelector('#nearbyForm button');
+    const originalText = btn.textContent;
+    
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Downloading...';
+      
+      const formData = new FormData();
+      checkboxes.forEach(cb => formData.append('layer_ids[]', cb.value));
+      
+      const center = this.map.getCenter();
+      formData.append('lat', center.lat);
+      formData.append('lng', center.lng);
+      formData.append('srid', document.getElementById('sridSelect').value);
+      
+      const response = await fetch('/export-dxf-multi/', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Download failed');
+      }
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nearby_layers_${new Date().toISOString().slice(0, 10)}.dxf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      document.getElementById('sidebar').classList.remove('active');
+      
+    } catch (error) {
+      alert(`Download failed: ${error.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+  
+  showLoading() {
+    document.getElementById('layerList').innerHTML = `
+      <div style="text-align: center; padding: 40px;">
+        <div class="skeleton" style="height: 20px; width: 60%; margin: 0 auto 10px;"></div>
+        <div class="skeleton" style="height: 20px; width: 40%; margin: 0 auto;"></div>
+      </div>
+    `;
+  }
+  
+  showError() {
+    document.getElementById('layerList').innerHTML = `
+      <div style="text-align: center; padding: 40px; color: #ef4444;">
+        <div style="font-size: 48px; margin-bottom: 10px;">❌</div>
+        <div>Failed to load layers</div>
+        <button class="btn btn-sm btn-primary mt-2" onclick="gisMap.loadData()">
+          Retry
+        </button>
+      </div>
+    `;
+  }
+}
+
+// Initialize the application
+const gisMap = new GISMapController();
 </script>
-{% endblock extrascript %}
+{% endblock %}

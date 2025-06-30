@@ -1,0 +1,26 @@
+id,name,url,extent_min_x,extent_min_y,extent_max_x,extent_max_y
+31,City of Perth SWD Pits,https://services7.arcgis.com/v8XBa2naYNQGOjlG/ArcGIS/rest/services/INF_DRN_PITS_PV/FeatureServer/,115.811787673736,-31.989404412649,115.884472205837,-31.9421253421805
+30,City of Perth SWD,https://services7.arcgis.com/v8XBa2naYNQGOjlG/ArcGIS/rest/services/INF_DRN_PIPES__PV/FeatureServer/,115.813376095492,-31.9894044118794,115.884453609803,-31.9421253421881
+29,City of Sydney 1m Contours,https://services1.arcgis.com/cNVyNtjGVZybOQWZ/arcgis/rest/services/Terrain_Contours/FeatureServer/,151.172776156605,-33.9255600689921,151.234903425392,-33.8530165793935
+28,City of Sydney SWD Pits,https://services1.arcgis.com/cNVyNtjGVZybOQWZ/ArcGIS/rest/services/Drainage_pits/FeatureServer/,151.173867676123,-33.9234773887271,151.234164744191,-33.8531993225449
+27,City of Sydney SWD,https://services1.arcgis.com/cNVyNtjGVZybOQWZ/ArcGIS/rest/services/Drainage_pipes/FeatureServer/,151.173861421492,-33.9237672969499,151.23416567134,-33.8531480368884
+26,SCRC 1m Contours,https://gislegacy.scc.qld.gov.au/arcgis/rest/services/Elevation/Contours_SCRC/MapServer/,152.550801639367,-26.985039642236,153.151077534664,-26.4307786642416
+25,QLD Contours,https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Elevation/ContoursCache/MapServer/,137.972248,-29.179414,153.5712685,-10.0157845
+19,WA Infrastructure,https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Infrastructure_and_Utilities/MapServer/,96.829971125,-35.130298371,128.953506631,-10.413077232
+17,Toowoomba Regional,https://maps.tr.qld.gov.au/arcgis/rest/services/External/External_TRMaps/MapServer/,150.199408151646,-28.260778227911,152.575955277204,-26.7404290369882
+16,Townsville City,https://maps.townsville.qld.gov.au/arcgis/rest/services/DBYD/DBYD_Service_2/MapServer/,-180.0,-90.0,180.0,90.0
+15,Tasmania theList,https://services.thelist.tas.gov.au/arcgis/rest/services/Public/Infrastructure/MapServer/,2.07357218718025,-85.1397660103436,158.952206248945,44.9451016431049
+14,Redland City,http://gis.redland.qld.gov.au/arcgis/rest/services/assets/a_asset_mapping/MapServer/,153.123552302591,-85.3455358847965,158.917475364461,-27.3877670717915
+13,Perth City,https://services7.arcgis.com/v8XBa2naYNQGOjlG/ArcGIS/rest/services/INF_COMM_CONDUIT_PV/FeatureServer/,115.841157335578,-31.9642809752799,115.883829984061,-31.9450398379865
+12,NSW Sixmaps,https://maps4.six.nsw.gov.au/arcgis/rest/services/sixmaps/Boundaries/MapServer/,140.333442057426,-37.9999999718964,159.281637935963,-27.6509530599292
+11,Logan City,https://services5.arcgis.com/ZUCWDRj8F77Xo351/arcgis/rest/services/SmartCitiesOD/FeatureServer/,152.800171770733,-27.938259926851,153.28775502859,-27.5870956337841
+10,Urban Utilities Water,https://services3.arcgis.com/ocUCNI2h4moKOpKX/ArcGIS/rest/services/UU_Water_OpenData/FeatureServer/,-180.0,-89.9999999999967,180.0,89.9999999999967
+9,Urban Utilities Sewer,https://services3.arcgis.com/ocUCNI2h4moKOpKX/ArcGIS/rest/services/UU_Sewer_OpenData/FeatureServer/,-180.0,-90.0,180.0,90.0
+8,Gold Coast City Stormwater,https://maps.cityofgoldcoast.com.au/arcgis/rest/services/Hosted/Stormwater_Infrastructure/FeatureServer/,153.169100979,-28.24057555,153.551203207,-27.69366035
+7,Gold Coast City Water,https://maps.cityofgoldcoast.com.au/arcgis/rest/services/Hosted/Water_Infrastructure/FeatureServer/,153.185826189,-28.1770060329999,153.550753715,-27.7082857359999
+6,Gold Coast City Sewer,https://maps.cityofgoldcoast.com.au/arcgis/rest/services/Hosted/Sewer_Infrastructure/FeatureServer/,153.193464081,-28.177601532,153.551849569,-27.710643003
+5,Ergon,https://services.arcgis.com/33eHbTVqo7gtiCE8/ArcGIS/rest/services/LookupandLive_Network_Public_EX_2021/FeatureServer/,146.027690621,-28.3370219449999,153.551125735,-17.5226682209999
+4,SCRC,https://gislegacy.scc.qld.gov.au/arcgis/rest/services/UtilitiesCommunication/Utilities_SCRC/MapServer/,152.653443514735,-26.9813895159584,153.15077545998,-26.4348667863515
+3,Unitywater Water,https://services2.arcgis.com/tQg86iShPXJPWQWw/ArcGIS/rest/services/UWPublicAccessWaterInfrastructureLayers/FeatureServer/,152.049862303161,-27.4224443477196,153.208022071543,-25.8832240718459
+2,Unitywater Sewer,https://services2.arcgis.com/tQg86iShPXJPWQWw/ArcGIS/rest/services/UWPublicAccessSewerInfrastructureLayers/FeatureServer/,152.719755703407,-27.4077349815127,153.206812272816,-26.2844751134184
+1,QLD Globe,https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/,137.501267232,-29.537803911,154.00107611,-8.47506055999997

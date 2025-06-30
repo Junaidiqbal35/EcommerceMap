@@ -11,6 +11,7 @@ admin.site.index_title = "Welcome to EcommerceMap Portal"
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('core.urls')),
+    path('demo/', include('demo.urls')),
     path('accounts/', include('accounts.urls')),
     path('accounts/', include('allauth.urls')),
     path('connects/', include('connects.urls')),

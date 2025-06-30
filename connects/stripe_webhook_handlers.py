@@ -11,7 +11,8 @@ def handle_successful_payment(session):
     try:
         user = User.objects.get(email=email)
         line_items = stripe.checkout.Session.list_line_items(session["id"])
-        print(f'{line_items}')
+        print(f'{line_items}'
+              )
         package_id = line_items["data"][0]["price"]["id"] if line_items["data"] else None
         print(package_id)
 

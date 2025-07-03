@@ -1,115 +1,61 @@
-import logging
+import json
 import requests
 import ezdxf
-import json
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.contrib.gis.geos import Point, Polygon, GEOSGeometry
 from django.contrib.gis.db.models.functions import Distance
-from django.contrib.gis.geos import Point, Polygon
-from django.db.models import Q, Count
+from django.db.models import Q
 from .models import Layer, DownloadRecord, Server
 
-from django.utils import timezone
-# Configure logger
+# Simple logger setup
+import logging
+
 logger = logging.getLogger(__name__)
 
-# HTTP session with retries for REST calls
-session = requests.Session()
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-retries = Retry(total=3, backoff_factor=0.2, status_forcelist=[500, 502, 503, 504])
-adapter = HTTPAdapter(max_retries=retries)
-session.mount('http://', adapter)
-session.mount('https://', adapter)
-session.headers.update({'User-Agent': 'GIS-Export-Agent/1.0'})
-
-# Query envelope offset (in degrees) - ~1km
-OFFSET_DEG = 0.01
+# Constants
+OFFSET_DEG = 0.01  # ~1km envelope for queries
+MAX_FEATURES_PREVIEW = 500  # Limit preview features
 
 
 @login_required
 def home(request):
-    """Renders main map page"""
+    """Render the main map page"""
     return render(request, "home.html")
-
-
-@login_required
-def server_coverage(request):
-    """
-    Return server coverage areas instead of individual layer markers.
-    This fixes the clustering issue by showing one marker per server coverage area.
-    """
-    servers = Server.objects.exclude(
-        Q(extent_min_x__isnull=True) |
-        Q(extent_min_y__isnull=True) |
-        Q(extent_max_x__isnull=True) |
-        Q(extent_max_y__isnull=True)
-    ).annotate(layer_count=Count('layers'))
-
-    data = []
-    for server in servers:
-        if server.layer_count > 0:
-            # Calculate center of server coverage area
-            center_x = (server.extent_min_x + server.extent_max_x) / 2
-            center_y = (server.extent_min_y + server.extent_max_y) / 2
-
-            # Validate coordinates are reasonable
-            if -180 <= center_x <= 180 and -90 <= center_y <= 90:
-                data.append({
-                    'id': server.id,
-                    'name': server.name,
-                    'lat': center_y,
-                    'lng': center_x,
-                    'layer_count': server.layer_count,
-                    'extent': {
-                        'min_x': server.extent_min_x,
-                        'min_y': server.extent_min_y,
-                        'max_x': server.extent_max_x,
-                        'max_y': server.extent_max_y
-                    }
-                })
-
-    return JsonResponse(data, safe=False)
 
 
 @login_required
 def all_layers(request):
     """
-    Return all available layers for the layer control panel.
-    Organized by server with status information.
+    Return all layers with basic information.
+    Simplified response for layer panel.
     """
     layers = Layer.objects.select_related('server').all().order_by('server__name', 'name')
 
     data = []
     for layer in layers:
-        # Get geometry for layer positioning if available
-        geom = getattr(layer, 'geometry', None)
+        # Get centroid if geometry exists
         centroid_lat = centroid_lng = None
-
-        if geom and geom.valid:
+        if layer.geometry:
             try:
-                centroid = geom.centroid
-                centroid_lat = centroid.y
-                centroid_lng = centroid.x
-            except Exception:
+                centroid = layer.geometry.centroid
+                # Ensure coordinates are within valid range
+                if -90 <= centroid.y <= 90 and -180 <= centroid.x <= 180:
+                    centroid_lat = centroid.y
+                    centroid_lng = centroid.x
+            except:
                 pass
 
         data.append({
             'id': layer.layer_id,
             'name': layer.name,
             'type': layer.type,
-            'number': layer.number,
-            'server_url': layer.server.url if layer.server else '',
-            'server_name': layer.server.name if layer.server else 'Unknown Server',
-            'status': getattr(layer, 'status', 'unknown'),
-            'last_checked': getattr(layer, 'last_checked', None),
+            'server_name': layer.server.name if layer.server else 'Unknown',
             'centroid_lat': centroid_lat,
-            'centroid_lng': centroid_lng,
-            'error_message': getattr(layer, 'error_message', '')
+            'centroid_lng': centroid_lng
         })
 
     return JsonResponse(data, safe=False)
@@ -118,8 +64,8 @@ def all_layers(request):
 @login_required
 def layer_preview_features(request):
     """
-    Get preview features for a layer in the current map view.
-    This replaces WMS with actual vector features.
+    Get features for layer preview within bounds.
+    Returns GeoJSON for rendering on map.
     """
     layer_id = request.GET.get('layer_id')
     minx = request.GET.get('minx')
@@ -131,24 +77,24 @@ def layer_preview_features(request):
         return JsonResponse({'error': 'Missing parameters'}, status=400)
 
     try:
-        layer = Layer.objects.select_related('server').get(layer_id=layer_id)
+        layer = get_object_or_404(Layer, layer_id=layer_id)
         minx, miny, maxx, maxy = float(minx), float(miny), float(maxx), float(maxy)
 
-        # Limit preview area to prevent huge downloads
+        # Simple area check
         area = (maxx - minx) * (maxy - miny)
-        if area > 0.1:  # About 10km x 10km at equator
+        if area > 0.5:  # ~50km x 50km
             return JsonResponse({
                 'type': 'FeatureCollection',
                 'features': [],
-                'message': 'Area too large for preview. Zoom in for details.'
+                'message': 'Area too large. Please zoom in.'
             })
 
-        # Fetch features for preview (limited number)
-        geoms = fetch_layer_features_bbox(layer, minx, miny, maxx, maxy)
+        # Fetch features from REST service
+        features = fetch_layer_features(layer, minx, miny, maxx, maxy)
 
-        # Convert to GeoJSON (limit to first 200 features for performance)
-        features = []
-        for geom in geoms[:200]:
+        # Convert to GeoJSON
+        geojson_features = []
+        for geom in features[:MAX_FEATURES_PREVIEW]:
             if geom and geom.valid:
                 try:
                     feature = {
@@ -156,109 +102,119 @@ def layer_preview_features(request):
                         'geometry': json.loads(geom.geojson),
                         'properties': {
                             'layer_name': layer.name,
-                            'layer_type': layer.type,
-                            'layer_id': layer.layer_id
+                            'layer_type': layer.type
                         }
                     }
-                    features.append(feature)
-                except Exception as e:
-                    logger.debug(f"Error converting geometry to GeoJSON: {e}")
+                    geojson_features.append(feature)
+                except:
                     continue
 
         return JsonResponse({
             'type': 'FeatureCollection',
-            'features': features,
-            'total_features': len(geoms),
-            'preview_limit': 200 if len(geoms) > 200 else None
+            'features': geojson_features
         })
 
-    except Layer.DoesNotExist:
-        return JsonResponse({'error': 'Layer not found'}, status=404)
     except Exception as e:
-        logger.error(f"Preview error for layer {layer_id}: {e}")
-        return JsonResponse({'error': 'Preview failed'}, status=500)
-
-
-@login_required
-def map_layers(request):
-    """
-    DEPRECATED: Use server_coverage instead.
-    This is kept for backward compatibility.
-    """
-    return server_coverage(request)
-
-
-@login_required
-def marker_layers(request):
-    """Return a single layer entry for a clicked marker."""
-    marker_id = request.GET.get('marker_id')
-    try:
-        lid = int(marker_id)
-    except (TypeError, ValueError):
-        return JsonResponse([], safe=False)
-    lyr = get_object_or_404(Layer, layer_id=lid)
-    if not getattr(lyr, 'geometry', None) and lyr.type == 'point':
-        # point with no offset
-        if lyr.offsetX == 0 and lyr.offsetY == 0:
-            return JsonResponse([], safe=False)
-    return JsonResponse([{'id': lyr.layer_id, 'name': lyr.name, 'type': lyr.type}], safe=False)
+        logger.error(f"Preview error: {e}")
+        return JsonResponse({'error': 'Failed to load preview'}, status=500)
 
 
 @login_required
 def nearby_layers(request):
     """
-    Return layers either by bounding box (minx,miny,maxx,maxy) or by radius (lat,lng,dist)
-    with optional distance_m for radius search.
-    Enhanced with status information and better filtering.
+    Return layers near a point with distance information.
+    Enhanced to find more layers including those with offset coordinates.
     """
-    qs = Layer.objects.none()
-
-    # bbox search
-    if all(k in request.GET for k in ('minx', 'miny', 'maxx', 'maxy')):
-        try:
-            minx, miny, maxx, maxy = [float(request.GET[k]) for k in ('minx', 'miny', 'maxx', 'maxy')]
-            bbox = Polygon.from_bbox((minx, miny, maxx, maxy))
-            qs = Layer.objects.filter(geometry__intersects=bbox)
-        except ValueError:
-            return JsonResponse([], safe=False)
-    # radius search
-    elif request.GET.get('lat') and request.GET.get('lng'):
-        try:
-            lat = float(request.GET['lat'])
-            lng = float(request.GET['lng'])
-            dist = float(request.GET.get('dist', 1000))  # Increased default to 1km
-        except ValueError:
-            return JsonResponse([], safe=False)
-        pt = Point(lng, lat, srid=4326)
-        qs = Layer.objects.annotate(distance=Distance('geometry', pt)).filter(distance__lte=dist).order_by('distance')
-    else:
+    try:
+        lat = float(request.GET.get('lat'))
+        lng = float(request.GET.get('lng'))
+        dist = float(request.GET.get('dist', 2000))  # Default 2km radius
+    except (TypeError, ValueError):
         return JsonResponse([], safe=False)
 
+    # Create point for distance calculation
+    point = Point(lng, lat, srid=4326)
+
+    # First try to find layers with geometry within distance
+    layers_with_geom = Layer.objects.annotate(
+        distance=Distance('geometry', point)
+    ).filter(
+        distance__lte=dist,
+        geometry__isnull=False
+    ).select_related('server')
+
+    # Also find point layers that might only have offset coordinates
+    # Create a bounding box for the search area
+    from django.db.models import Q
+    import math
+
+    # Rough conversion: 1 degree ≈ 111km
+    degree_offset = dist / 111000.0
+
+    layers_with_offset = Layer.objects.filter(
+        Q(type='point') &
+        Q(offsetX__gte=lng - degree_offset) &
+        Q(offsetX__lte=lng + degree_offset) &
+        Q(offsetY__gte=lat - degree_offset) &
+        Q(offsetY__lte=lat + degree_offset) &
+        Q(offsetX__isnull=False) &
+        Q(offsetY__isnull=False) &
+        ~Q(offsetX=0, offsetY=0)
+    ).select_related('server')
+
+    # Combine both querysets
+    all_layers = list(layers_with_geom) + list(layers_with_offset)
+    # Remove duplicates
+    seen = set()
+    unique_layers = []
+    for layer in all_layers:
+        if layer.layer_id not in seen:
+            seen.add(layer.layer_id)
+            unique_layers.append(layer)
+
     data = []
-    for lyr in qs:
-        geom = getattr(lyr, 'geometry', None)
-        if not geom:
-            continue
-
+    for layer in unique_layers[:30]:  # Limit to 30 nearest
         try:
-            centroid = geom.centroid
-            item = {
-                'id': lyr.layer_id,
-                'name': lyr.name,
-                'type': lyr.type,
-                'lat': centroid.y,
-                'lng': centroid.x,
-                'status': getattr(lyr, 'status', 'unknown'),
-                'server_name': lyr.server.name if lyr.server else 'Unknown'
-            }
-            if hasattr(lyr, 'distance'):
-                item['distance_m'] = round(lyr.distance.m, 1)
-            data.append(item)
+            # Calculate distance and centroid
+            if hasattr(layer, 'distance') and layer.distance:
+                distance_m = round(layer.distance.m, 1)
+                if layer.geometry:
+                    centroid = layer.geometry.centroid
+                    layer_lat, layer_lng = centroid.y, centroid.x
+                else:
+                    layer_lat, layer_lng = layer.offsetY, layer.offsetX
+            else:
+                # For offset-only layers, calculate distance manually
+                if layer.offsetX and layer.offsetY:
+                    layer_lat, layer_lng = layer.offsetY, layer.offsetX
+                    # Simple distance calculation
+                    dx = (lng - layer_lng) * 111000 * math.cos(math.radians(lat))
+                    dy = (lat - layer_lat) * 111000
+                    distance_m = round(math.sqrt(dx * dx + dy * dy), 1)
+                else:
+                    continue
+
+            # Skip if distance is too far (double-check)
+            if distance_m > dist:
+                continue
+
+            data.append({
+                'id': layer.layer_id,
+                'name': layer.name,
+                'type': layer.type,
+                'server_name': layer.server.name if layer.server else 'Unknown',
+                'lat': layer_lat,
+                'lng': layer_lng,
+                'distance_m': distance_m
+            })
         except Exception as e:
-            logger.debug(f"Error processing layer {lyr.layer_id}: {e}")
+            logger.debug(f"Error processing layer {layer.layer_id}: {e}")
             continue
 
-    return JsonResponse(data, safe=False)
+    # Sort by distance
+    data.sort(key=lambda x: x['distance_m'])
+
+    return JsonResponse(data[:20], safe=False)  # Return top 20
 
 
 @login_required
@@ -266,212 +222,189 @@ def nearby_layers(request):
 @require_POST
 def export_dxf_multi(request):
     """
-    Enhanced export function with better error handling and coordinate transformation.
-    Supports both point-based and bounding box exports.
+    Export selected layers as DXF file.
+    Simplified version with basic error handling.
     """
     user = request.user
     layer_ids = request.POST.getlist('layer_ids[]')
-    lat = request.POST.get('lat')
-    lng = request.POST.get('lng')
-    srid = request.POST.get('srid', '28356')  # Default to GDA94 Zone 56
-
-    # Check for bounding box parameters
     minx = request.POST.get('minx')
     miny = request.POST.get('miny')
     maxx = request.POST.get('maxx')
     maxy = request.POST.get('maxy')
 
-    # Validate coordinates
-    try:
-        if lat and lng:
-            lat = float(lat)
-            lng = float(lng)
-        else:
-            lat = lng = None
-
-        if minx and miny and maxx and maxy:
-            minx, miny, maxx, maxy = float(minx), float(miny), float(maxx), float(maxy)
-            # Validate bounding box area
-            area = (maxx - minx) * (maxy - miny)
-            if area > 1.0:  # About 100km x 100km
-                return JsonResponse({'error': 'Export area too large. Please zoom in and try again.'}, status=400)
-        else:
-            minx = miny = maxx = maxy = None
-
-        srid = int(srid)
-    except (TypeError, ValueError) as e:
-        return JsonResponse({'error': f'Invalid coordinate parameters: {str(e)}'}, status=400)
+    # Optional center point for download record
+    lat = request.POST.get('lat')
+    lng = request.POST.get('lng')
 
     if not layer_ids:
-        return JsonResponse({'error': 'No layers selected.'}, status=400)
+        return JsonResponse({'error': 'No layers selected'}, status=400)
 
-    candidates = Layer.objects.filter(layer_id__in=layer_ids)
-    if not candidates.exists():
-        return JsonResponse({'error': 'No valid layers found.'}, status=404)
-
-    # Check user connects
-    needed = len(candidates)
-    if hasattr(user, 'connects'):
-        if user.connects < needed:
-            return JsonResponse({
-                'error': f'Not enough connects. Need {needed}, you have {user.connects}. Please purchase more connects.'
-            }, status=403)
-
-    # Fetch features for each layer
-    exports = []
-    skipped_layers = []
-
-    for lyr in candidates:
-        rest_geoms = []
-        try:
-            if minx is not None:
-                # Bounding box export
-                rest_geoms = fetch_layer_features_bbox(lyr, minx, miny, maxx, maxy)
-            else:
-                # Point-based export
-                rest_geoms = fetch_layer_features(lyr, lat, lng)
-        except Exception as e:
-            logger.warning(f"REST fetch error for {lyr.name}: {e}")
-            skipped_layers.append(lyr.name)
-            continue
-
-        if lyr.type in ('polyline', 'polygon'):
-            if not rest_geoms:
-                logger.warning(f"Skipping {lyr.name}: no REST features for {lyr.type}")
-                skipped_layers.append(lyr.name)
-                continue
-            exports.append((lyr, rest_geoms))
-        else:  # point layer
-            if rest_geoms:
-                exports.append((lyr, rest_geoms))
-            elif lyr.geometry:
-                exports.append((lyr, [lyr.geometry]))
-            else:
-                skipped_layers.append(lyr.name)
-
-    if not exports:
-        error_msg = 'No geometry to export for selected area.'
-        if skipped_layers:
-            error_msg += f' Skipped layers: {", ".join(skipped_layers)}'
-        return JsonResponse({'error': error_msg}, status=400)
-
-    # Deduct connects only for successful exports
-    actual_cost = len(exports)
-    if hasattr(user, 'connects'):
-        user.connects -= actual_cost
-        user.save()
-
-    # Create DXF with coordinate transformation
     try:
+        # Parse bounds
+        minx, miny = float(minx), float(miny)
+        maxx, maxy = float(maxx), float(maxy)
+
+        # Parse optional center point
+        if lat and lng:
+            lat, lng = float(lat), float(lng)
+        else:
+            # Calculate center from bounds
+            lat = (miny + maxy) / 2
+            lng = (minx + maxx) / 2
+
+        # Check area size
+        area = (maxx - minx) * (maxy - miny)
+        if area > 1.0:  # ~100km x 100km
+            return JsonResponse({
+                'error': 'Area too large. Please zoom in to a smaller area.'
+            }, status=400)
+
+        # Get layers
+        layers = Layer.objects.filter(layer_id__in=layer_ids).select_related('server')
+
+        if not layers.exists():
+            return JsonResponse({'error': 'No valid layers found'}, status=404)
+
+        # Check user connects if applicable
+        if hasattr(user, 'connects'):
+            if user.connects < len(layers):
+                return JsonResponse({
+                    'error': f'Not enough connects. Need {len(layers)}, you have {user.connects}'
+                }, status=403)
+
+        # Create DXF
         doc = ezdxf.new('R2010')
         msp = doc.modelspace()
 
-        total_features = 0
-        for lyr, geoms in exports:
+        exported_count = 0
+        successful_layers = []
+
+        for layer in layers:
+            # Fetch features
+            features = fetch_layer_features(layer, minx, miny, maxx, maxy)
+
             layer_feature_count = 0
-            for g in geoms:
-                if not g or not g.valid:
-                    continue
+            for geom in features:
+                if geom and geom.valid:
+                    draw_geometry_to_dxf(msp, geom, layer.name)
+                    layer_feature_count += 1
+                    exported_count += 1
 
-                # Transform geometry to target SRID
-                if g.srid != srid:
-                    try:
-                        g = g.transform(srid, clone=True)
-                    except Exception as e:
-                        logger.warning(f"Transform error {g.srid}->{srid} for {lyr.name}: {e}")
-                        continue
-
-                # Draw geometry in DXF
-                draw_geometry(msp, g, lyr.name)
-                layer_feature_count += 1
-                total_features += 1
-
-            # Record download for layers that had features
             if layer_feature_count > 0:
+                successful_layers.append(layer)
+
+                # Log download
                 DownloadRecord.objects.create(
                     user=user,
-                    layer=lyr,
+                    layer=layer,
                     latitude=lat,
                     longitude=lng
-                    # Add SRID to model if you have this field
-                    # srid=srid
                 )
 
-        # Return DXF file
+        if exported_count == 0:
+            return JsonResponse({'error': 'No features found in selected area'}, status=404)
+
+        # Deduct connects only for successfully exported layers
+        if hasattr(user, 'connects') and successful_layers:
+            user.connects -= len(successful_layers)
+            user.save()
+
+        # Return DXF
         response = HttpResponse(content_type='application/dxf')
-        timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'gis_export_{timestamp}.dxf'
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Content-Disposition'] = 'attachment; filename="export.dxf"'
         doc.write(response)
 
-        logger.info(f"Exported {total_features} features from {len(exports)} layers for user {user.username}")
+        logger.info(f"Exported {exported_count} features from {len(successful_layers)} layers for {user.username}")
         return response
 
     except Exception as e:
-        logger.error(f"DXF creation error: {e}")
-        return JsonResponse({'error': 'Failed to create DXF file. Please try again.'}, status=500)
+        logger.error(f"Export error: {e}")
+        return JsonResponse({'error': 'Export failed. Please try again.'}, status=500)
 
 
-def fetch_layer_features(layer, lat, lng):
+def fetch_layer_features(layer, minx, miny, maxx, maxy):
     """
-    Query ArcGIS REST for features in a square envelope around click point.
+    Fetch features from ArcGIS REST service.
     Returns list of GEOS geometries.
-    """
-    if lat is None or lng is None:
-        return []
-    minx, miny = lng - OFFSET_DEG, lat - OFFSET_DEG
-    maxx, maxy = lng + OFFSET_DEG, lat + OFFSET_DEG
-    return fetch_layer_features_bbox(layer, minx, miny, maxx, maxy)
 
-
-def fetch_layer_features_bbox(layer, minx, miny, maxx, maxy):
-    """
-    Enhanced feature fetching with better error handling and optimization.
-    Returns list of GEOS geometries.
+    Enhanced to handle different layer types and offset coordinates.
     """
     if not layer.server:
-        logger.warning(f"Layer {layer.name} has no server configured")
         return []
 
-    # Build query URL
+    # For point layers with offset coordinates, check if the offset point is within bounds
+    if (layer.type == 'point' and
+            layer.offsetX is not None and layer.offsetY is not None and
+            layer.offsetX != 0 and layer.offsetY != 0):
+
+        # Check if offset point is within query bounds
+        if (minx <= layer.offsetX <= maxx and miny <= layer.offsetY <= maxy):
+            # Return the offset point as a feature
+            try:
+                point = Point(layer.offsetX, layer.offsetY, srid=4326)
+                return [point]
+            except:
+                pass
+
+    # Build query URL for REST service
     base_url = layer.server.url.rstrip('/')
     url = f"{base_url}/{layer.number}/query"
+
+    # Adjust query parameters based on layer type
+    spatial_rel = 'esriSpatialRelIntersects'
+    if layer.type == 'point':
+        # For points, use contains to get points within the envelope
+        spatial_rel = 'esriSpatialRelContains'
 
     params = {
         'f': 'geojson',
         'where': '1=1',
         'geometry': f"{minx},{miny},{maxx},{maxy}",
         'geometryType': 'esriGeometryEnvelope',
+        'spatialRel': spatial_rel,
         'inSR': 4326,
         'outSR': 4326,
         'returnGeometry': 'true',
-        'maxRecordCount': 2000,  # Limit to prevent huge downloads
-        'resultOffset': 0
+        'outFields': '*',  # Get all fields
+        'maxRecordCount': 2000  # Increased limit
     }
 
     try:
-        logger.debug(f"Fetching features for {layer.name} from {url}")
-        resp = session.get(url, params=params, timeout=20)
-        resp.raise_for_status()
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
 
-        gj = resp.json()
+        data = response.json()
 
-        # Check for ArcGIS error response
-        if 'error' in gj:
-            error_msg = gj['error'].get('message', 'Unknown error')
-            logger.error(f"ArcGIS error for {layer.name}: {error_msg}")
+        # Check for errors in response
+        if 'error' in data:
+            logger.error(f"ArcGIS error for {layer.name}: {data['error']}")
             return []
 
-        geoms = []
-        features = gj.get('features', [])
+        features = data.get('features', [])
 
-        for feat in features:
-            geom = geojson_to_geos(feat.get('geometry'))
-            if geom and geom.valid:
-                geoms.append(geom)
+        # If no features but layer has offset coordinates, return offset point
+        if not features and layer.type == 'point' and layer.offsetX and layer.offsetY:
+            if (minx <= layer.offsetX <= maxx and miny <= layer.offsetY <= maxy):
+                try:
+                    point = Point(layer.offsetX, layer.offsetY, srid=4326)
+                    return [point]
+                except:
+                    pass
 
-        logger.debug(f"Fetched {len(geoms)} valid features for {layer.name}")
-        return geoms
+        geometries = []
+        for feature in features:
+            geom_data = feature.get('geometry')
+            if geom_data:
+                try:
+                    # Convert to GEOS geometry
+                    geom = GEOSGeometry(json.dumps(geom_data))
+                    if geom.valid:
+                        geometries.append(geom)
+                except:
+                    continue
+
+        logger.debug(f"Fetched {len(geometries)} features for {layer.name}")
+        return geometries
 
     except requests.exceptions.Timeout:
         logger.error(f"Timeout fetching features for {layer.name}")
@@ -480,131 +413,96 @@ def fetch_layer_features_bbox(layer, minx, miny, maxx, maxy):
         logger.error(f"Request error for {layer.name}: {e}")
         return []
     except Exception as e:
-        logger.error(f"Unexpected error fetching {layer.name}: {e}")
+        logger.error(f"Failed to fetch features for {layer.name}: {e}")
         return []
 
 
-def geojson_to_geos(coords):
+def draw_geometry_to_dxf(msp, geom, layer_name):
     """
-    Enhanced GeoJSON to GEOS conversion with better error handling.
+    Draw a GEOS geometry to DXF modelspace.
+    Simplified drawing logic.
     """
-    try:
-        from django.contrib.gis.geos import GEOSGeometry
-
-        if not coords or not coords.get('type') or not coords.get('coordinates'):
-            return None
-
-        # Validate coordinate structure
-        geom_type = coords.get('type')
-        coordinates = coords.get('coordinates')
-
-        if geom_type == 'Point' and len(coordinates) < 2:
-            return None
-        elif geom_type == 'LineString' and len(coordinates) < 2:
-            return None
-        elif geom_type == 'Polygon' and not coordinates:
-            return None
-
-        gj = {
-            'type': geom_type,
-            'coordinates': coordinates
-        }
-
-        geom = GEOSGeometry(json.dumps(gj), srid=4326)
-
-        # Validate geometry
-        if not geom.valid:
-            logger.debug(f"Invalid geometry created from GeoJSON: {geom_type}")
-            return None
-
-        return geom
-
-    except Exception as e:
-        logger.debug(f"GeoJSON conversion error: {e}")
-        return None
-
-
-def draw_geometry(msp, geom, layer_name):
-    """
-    Enhanced geometry drawing with better error handling and layer organization.
-    """
-    if not geom or not geom.valid:
-        return
-
-    t = geom.geom_type
-
-    # Create DXF attributes with layer name
-    dxf_attrs = {'layer': layer_name}
+    attrs = {'layer': layer_name}
 
     try:
-        if t == 'Point':
-            msp.add_point((geom.x, geom.y), dxfattribs=dxf_attrs)
-        elif t in ('LineString', 'LinearRing'):
+        geom_type = geom.geom_type
+
+        if geom_type == 'Point':
+            msp.add_point((geom.x, geom.y), dxfattribs=attrs)
+
+        elif geom_type == 'LineString':
             coords = list(geom.coords)
             if len(coords) >= 2:
-                msp.add_lwpolyline(coords, dxfattribs=dxf_attrs)
-        elif t == 'MultiLineString':
-            for ln in geom:
-                coords = list(ln.coords)
+                msp.add_lwpolyline(coords, dxfattribs=attrs)
+
+        elif geom_type == 'Polygon':
+            # Draw exterior ring
+            coords = list(geom.exterior.coords)
+            if len(coords) >= 3:
+                msp.add_lwpolyline(coords, close=True, dxfattribs=attrs)
+
+            # Draw holes
+            for interior in geom.interiors:
+                coords = list(interior.coords)
+                if len(coords) >= 3:
+                    msp.add_lwpolyline(coords, close=True, dxfattribs=attrs)
+
+        elif geom_type == 'MultiPoint':
+            for point in geom:
+                msp.add_point((point.x, point.y), dxfattribs=attrs)
+
+        elif geom_type == 'MultiLineString':
+            for line in geom:
+                coords = list(line.coords)
                 if len(coords) >= 2:
-                    msp.add_lwpolyline(coords, dxfattribs=dxf_attrs)
-        elif t == 'Polygon':
-            # Exterior ring
-            exterior_coords = list(geom.exterior.coords)
-            if len(exterior_coords) >= 3:
-                msp.add_lwpolyline(exterior_coords, close=True, dxfattribs=dxf_attrs)
-            # Interior rings (holes)
-            for hole in geom.interiors:
-                hole_coords = list(hole.coords)
-                if len(hole_coords) >= 3:
-                    msp.add_lwpolyline(hole_coords, close=True, dxfattribs=dxf_attrs)
-        elif t == 'MultiPolygon':
+                    msp.add_lwpolyline(coords, dxfattribs=attrs)
+
+        elif geom_type == 'MultiPolygon':
             for poly in geom:
-                draw_geometry(msp, poly, layer_name)
-        elif t == 'GeometryCollection':
-            for g in geom:
-                draw_geometry(msp, g, layer_name)
-        else:
-            logger.warning(f"Unsupported geometry type: {t}")
+                draw_geometry_to_dxf(msp, poly, layer_name)
+
     except Exception as e:
-        logger.error(f"Error drawing {t} geometry for layer {layer_name}: {e}")
+        logger.error(f"Error drawing {geom_type}: {e}")
 
 
-# Additional utility functions for layer management
+# Optional: Additional utility endpoints
 
 @login_required
-def layer_status_summary(request):
-    """Get a summary of layer statuses for admin dashboard"""
-    from django.db.models import Count
-
+def layer_info(request, layer_id):
+    """
+    Get detailed information about a specific layer.
+    Useful for tooltips and popups.
+    """
     try:
-        status_counts = Layer.objects.values('status').annotate(count=Count('status'))
-        total_layers = Layer.objects.count()
+        layer = get_object_or_404(Layer, layer_id=layer_id)
 
-        summary = {
-            'total': total_layers,
-            'by_status': {item['status'] or 'unknown': item['count'] for item in status_counts},
-            'servers': Server.objects.count(),
-            'never_checked': Layer.objects.filter(last_checked__isnull=True).count()
+        data = {
+            'id': layer.layer_id,
+            'name': layer.name,
+            'type': layer.type,
+            'server': {
+                'name': layer.server.name if layer.server else 'Unknown',
+                'url': layer.server.url if layer.server else None
+            },
+            'symbol': layer.symbol,
+            'has_geometry': bool(layer.geometry),
+            'extent': layer.geometry.extent if layer.geometry else None
         }
 
-        return JsonResponse(summary)
+        return JsonResponse(data)
+
     except Exception as e:
-        logger.error(f"Error getting layer status summary: {e}")
-        return JsonResponse({'error': 'Failed to get status summary'}, status=500)
+        logger.error(f"Error getting layer info: {e}")
+        return JsonResponse({'error': 'Failed to get layer info'}, status=500)
 
 
 @login_required
-def user_connects_info(request):
-    """Get user's current connects balance"""
-    try:
-        connects = getattr(request.user, 'connects', 0)
-        return JsonResponse({
-            'connects': connects,
-            'username': request.user.username
-        })
-    except Exception as e:
-        logger.error(f"Error getting user connects info: {e}")
-        return JsonResponse({'error': 'Failed to get connects info'}, status=500)
-
-
+def check_connects(request):
+    """
+    Check user's available connects.
+    """
+    connects = getattr(request.user, 'connects', 0)
+    return JsonResponse({
+        'connects': connects,
+        'username': request.user.username
+    })

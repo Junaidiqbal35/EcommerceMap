@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "name": "Brisbane Test Server",
+    "url": "https://example.com/arcgis/rest/services/Brisbane/FeatureServer/",
+    "extent_min_x": 152.90,
+    "extent_min_y": -27.60,
+    "extent_max_x": 153.10,
+    "extent_max_y": -27.40
+  },
+  {
+    "id": 2,
+    "name": "Gold Coast Test Server",
+    "url": "https://example.com/arcgis/rest/services/GoldCoast/FeatureServer/",
+    "extent_min_x": 153.00,
+    "extent_min_y": -28.20,
+    "extent_max_x": 153.55,
+    "extent_max_y": -27.70
+  }
+]

@@ -4,6 +4,7 @@ from accounts.models import User
 
 
 class Server(models.Model):
+
     id = models.IntegerField(primary_key=True)
     name = models.CharField(max_length=255)
     url = models.URLField()
@@ -15,8 +16,12 @@ class Server(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        ordering = ['name']
+
 
 class Layer(models.Model):
+
     LAYER_TYPES = [
         ('point', 'Point'),
         ('polyline', 'Polyline'),
@@ -33,13 +38,27 @@ class Layer(models.Model):
     symbol = models.CharField(max_length=255, blank=True, null=True)
     insert = models.CharField(max_length=255, blank=True, null=True)
 
+    # Geometry field for spatial queries
     geometry = gis_models.GeometryField(srid=4326, null=True, blank=True)
 
     def __str__(self):
         return self.name
 
+    class Meta:
+        ordering = ['server__name', 'name']
+
+    def get_extent(self):
+
+        if self.geometry:
+            try:
+                return self.geometry.extent
+            except:
+                pass
+        return None
+
 
 class DownloadRecord(models.Model):
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='downloads')
     layer = models.ForeignKey(Layer, on_delete=models.SET_NULL, null=True, blank=True)
     latitude = models.FloatField(null=True, blank=True)
@@ -49,3 +68,6 @@ class DownloadRecord(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.layer.name if self.layer else 'N/A'} - {self.downloaded_at}"
+
+    class Meta:
+        ordering = ['-downloaded_at']

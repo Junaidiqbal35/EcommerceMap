@@ -1,225 +1,147 @@
 {% extends "base.html" %}
 {% load static %}
+{% block extrahead %}
+     <link rel="stylesheet" href="{% static 'css/home.css' %}">
+{% endblock extrahead %}
 
 {% block content %}
-<style>
-  #map {
-    height: 600px;
-    width: 100%;
-    position: relative;
-    z-index: 1;
-  }
-  #sidebar {
-    position: absolute;
-    top: 60px; 
-    left: 0;
-    width: 280px;
-    max-height: calc(100% - 80px);
-    background: #222;
-    color: #ccc;
-    padding: 15px;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.5);
-    transform: translateX(-100%); /* hidden by default */
-    transition: transform 0.3s ease-in-out;
-    overflow-y: auto;
-    z-index: 1000;
-  }
-  #sidebar.active {
-    transform: translateX(0); /* show sidebar */
-  }
-  #sidebar h4 {
-    margin-top: 0;
-    color: #fff;
-  }
-  #sidebar .btn-close {
-    background: none;
-    border: none;
-    color: #fff;
-    font-size: 1.2rem;
-    float: right;
-    cursor: pointer;
-  }
-  .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-    background: #222 !important;
-    color: #fff !important;
-  }
-</style>
+<!-- Map Container -->
+<div id="map"></div>
 
-<div id="sidebar">
-  <button class="btn-close" id="closeSidebar">&times;</button>
-  <h4>Nearby Layers</h4>
-  <form id="nearbyLayerForm">
-    <div id="layerListContainer"></div>
-    <p id="connectsInfo" style="font-size: 0.9rem; color: #aaa;"></p>
-    <button type="submit" class="btn btn-sm btn-primary mt-3">
-      Download Selected
-    </button>
-  </form>
+<!-- No features message -->
+<div id="noFeaturesMessage" class="no-features-message">
+  No features in this area. Try zooming out or panning to a different location.
 </div>
 
-<div id="map"></div>
-{% endblock content %}
+<!-- Simplified Basemap Control -->
+<div class="basemap-control">
+  <div class="basemap-header">
+    <span>🗺️</span>
+    <span>Basemaps</span>
+  </div>
+  <div class="basemap-options">
+    <label class="basemap-option">
+      <input type="radio" name="basemap" value="osm" checked>
+      <img src="https://a.tile.openstreetmap.org/9/238/307.png" alt="Streets">
+      <span>Streets</span>
+    </label>
+    <label class="basemap-option">
+      <input type="radio" name="basemap" value="terrain">
+      <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/9/307/238" alt="Terrain">
+      <span>Terrain</span>
+    </label>
+    <label class="basemap-option">
+      <input type="radio" name="basemap" value="dark">
+      <img src="https://a.basemaps.cartocdn.com/dark_all/9/238/307.png" alt="Dark">
+      <span>Dark Mode</span>
+    </label>
+  </div>
+</div>
+
+<!-- Simplified Layer Control Panel -->
+<div id="layerPanel">
+  <div class="panel-header">
+    <h4>
+      <span>🗺️</span>
+      <span>Layers</span>
+      <span id="layerCount" style="font-size: 14px; font-weight: normal;"></span>
+    </h4>
+    <div class="panel-controls">
+      <button class="btn-control" onclick="gisApp.toggleMinimize()" title="Minimize">
+        <span id="minimizeIcon">−</span>
+      </button>
+      <button class="btn-control" onclick="gisApp.refreshLayers()" title="Refresh layers">
+        ↻
+      </button>
+    </div>
+  </div>
+  
+  <div class="panel-content">
+    <!-- Layer list -->
+    <div id="layerList">
+      <div class="spinner"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Nearby Layers Sidebar -->
+<div id="sidebar">
+  <div class="sidebar-header">
+    <h5>📍 Nearby Layers</h5>
+    <button class="btn-close" onclick="gisApp.closeSidebar()">×</button>
+  </div>
+  <div class="sidebar-content">
+    <div style="margin-bottom: 15px; padding: 10px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-radius: 8px; font-size: 13px; border: 1px solid rgba(102, 126, 234, 0.2);">
+      <strong>Tip:</strong> Showing layers within 2km of clicked location
+    </div>
+    <form id="nearbyForm">
+      <div id="nearbyList"></div>
+      <button type="submit" class="download-btn" style="width: 100%; margin-top: 20px; padding: 12px; background: linear-gradient(135deg, rgb(102, 126, 234) 0%, rgb(118, 75, 162) 100%); color: white; border: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); transition: all 0.2s;" 
+              onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.4)'"
+              onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)'">
+        <span>💾</span>
+        <span>Download Selected</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Export Button (floating action button) -->
+<button id="exportFab" class="export-fab" onclick="gisApp.toggleExportPanel()" title="Export Layers" style="display: none;">
+  <span>💾</span>
+</button>
+
+{#<!-- Export Modal -->#}
+{#<div id="exportModal" class="export-modal">#}
+{#  <div class="export-modal-content">#}
+{#    <div class="export-modal-header">#}
+{#      <h3>Export Layers</h3>#}
+{#      <button class="btn-close" onclick="gisApp.toggleExportPanel()">×</button>#}
+{#    </div>#}
+{#    <div class="export-modal-body">#}
+{#      <div class="export-info" id="exportInfo">#}
+{#        <div class="export-count">0</div>#}
+{#        <div class="export-label">layers selected</div>#}
+{#      </div>#}
+{#      #}
+{#      <label for="exportFormat" style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b;">Export Format:</label>#}
+{#      <select id="exportFormat" style="width: 100%; padding: 10px; margin-bottom: 16px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 16px;">#}
+{#        <option value="dxf">DXF (CAD)</option>#}
+{#        <option value="geojson">GeoJSON</option>#}
+{#      </select>#}
+{#      #}
+{#      <button id="downloadBtn" class="export-btn" disabled onclick="gisApp.exportLayers()">#}
+{#        <span>💾</span>#}
+{#        <span>Export Selected Layers</span>#}
+{#      </button>#}
+{#      #}
+{#      <div class="export-cost" id="exportCost">#}
+{#        Cost: <strong>0 connects</strong>#}
+{#      </div>#}
+{#    </div>#}
+{#  </div>#}
+{#</div>#}
+
+
+
+{% endblock %}
 
 {% block extrascript %}
-<!-- If you want to use leaflet.markercluster -->
-<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"
-/>
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"
-/>
+<!-- External map libraries -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-hash"></script>
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+<script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
 
+<!-- Your custom GIS application script -->
+<script src="{% static 'js/gis.js' %}"></script>
+
+<!-- Initialize the application -->
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-  const map = L.map("map").setView([-27.4698, 153.0251], 10);
-     L.hash(map);
-      L.Control.geocoder().addTo(map);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '© OpenStreetMap contributors'
-  }).addTo(map);
-
-  // For clustering many point markers:
-  const markers = L.markerClusterGroup();
-  map.addLayer(markers);
-
-  // Simple fetch utility
-  async function fetchData(url) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (err) {
-      console.error("Fetch error:", err);
-      return null;
-    }
-  }
-    
-  async function loadMarkers() {
-    const data = await fetchData("/map-layers/");
-    if (!data) return;
-    markers.clearLayers();
-
-    data.forEach(l => {
-      const marker = L.marker([l.lat, l.lng]);
-      // We add a "Nearby Layers" button in the popup
-      marker.bindPopup(`
-        <b>${l.name}</b> [${l.type}]<br/>
-        <button class="btn btn-sm btn-primary" id="openNearbyBtn"
-          data-lat="${l.lat}" data-lng="${l.lng}">
-          Nearby Layers
-        </button>
-      `);
-  
-      marker.on("popupopen", () => {
-        setTimeout(() => {
-          const openBtn = document.getElementById("openNearbyBtn");
-          if (openBtn) {
-            openBtn.addEventListener("click", () => {
-              showSidebar(openBtn.dataset.lat, openBtn.dataset.lng);
-            });
-          }
-        }, 100);
-      });
-      markers.addLayer(marker);
-    });
-  }
-  loadMarkers();
-
-  // 2) The sidebar logic
-  const sidebar = document.getElementById("sidebar");
-  const closeSidebarBtn = document.getElementById("closeSidebar");
-  const layerListContainer = document.getElementById("layerListContainer");
-  const connectsInfo = document.getElementById("connectsInfo");
-  let clickedLat = null;
-  let clickedLng = null;
-
-
-  closeSidebarBtn.addEventListener("click", () => {
-    sidebar.classList.remove("active");
-  });
-
-
-  async function showSidebar(lat, lng) {
-     clickedLat = parseFloat(lat);  
-     clickedLng = parseFloat(lng);  
-    sidebar.classList.add("active");
-    layerListContainer.innerHTML = "<em>Loading nearby layers...</em>";
-    connectsInfo.textContent = "";
-
-    // e.g. 500 meter search radius
-    const dist = 500;
-    const data = await fetchData(`/nearby-layers/?lat=${lat}&lng=${lng}&dist=${dist}`);
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      layerListContainer.innerHTML = "<em>No layers found within range.</em>";
-      return;
-    }
-      // Render checkboxes
-    let html = "";
-    data.forEach(d => {
-      html += `
-        <div>
-          <input type="checkbox" name="layer_ids" value="${d.id}" checked />
-          <label>${d.name} [${d.type}] ~ ${d.distance_m}m away</label>
-        </div>
-      `;
-    });
-    layerListContainer.innerHTML = html;
-
-    // Listen for changes, update "connects" count
-    updateConnectsInfo();
-    layerListContainer.addEventListener("change", updateConnectsInfo);
-  }
-
-  function updateConnectsInfo() {
-    const checked = layerListContainer.querySelectorAll('input[name="layer_ids"]:checked');
-    connectsInfo.textContent = checked.length > 0
-      ? `Will cost ${checked.length} connects.`
-      : "No layers selected.";
-  }
-
-
-  document.getElementById("nearbyLayerForm").addEventListener("submit", async function(e) {
-    e.preventDefault();
-    const checks = layerListContainer.querySelectorAll('input[name="layer_ids"]:checked');
-    if (checks.length === 0) {
-      alert("Select at least one layer");
-      return;
-    }
-    const formData = new FormData();
-    checks.forEach(c => formData.append("layer_ids[]", c.value));
-    formData.append("lat", clickedLat);
-    formData.append("lng", clickedLng);
-    formData.append("zoom", map.getZoom());
-
-    try {
-      const resp = await fetch("/export-dxf-multi/", {
-        method: "POST",
-        body: formData
-      });
-      if (!resp.ok) {
-        const err = await resp.json();
-        alert(err.error || "Download error");
-        return;
-      }
-
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "nearby_layers.dxf";
-      a.click();
-      URL.revokeObjectURL(url);
-
-   
-      sidebar.classList.remove("active");
-    } catch (err) {
-      console.error("DXF Export error:", err);
-      alert("An error occurred during the download.");
-    }
-  });
+document.addEventListener('DOMContentLoaded', function() {
+    gisApp.init();
 });
+
+
 </script>
-{% endblock extrascript %}
+{% endblock %}

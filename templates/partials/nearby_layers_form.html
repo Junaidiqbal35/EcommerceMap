@@ -1,0 +1,81 @@
+{% load static %}
+
+{% if layers %}
+  <form hx-post="/export-dxf-htmx/" 
+        hx-encoding="multipart/form-data"
+        hx-target="#messages-container"
+        hx-swap="innerHTML">
+    {% csrf_token %}
+    <input type="hidden" name="lat" value="{{ lat }}">
+    <input type="hidden" name="lng" value="{{ lng }}">
+    <input type="hidden" name="zoom" value="10">
+    
+    <div class="layers-list">
+      {% for layer in layers %}
+        <div class="form-check mb-2">
+          <input type="checkbox" 
+                 class="form-check-input" 
+                 name="layer_ids" 
+                 value="{{ layer.layer_id }}" 
+                 id="layer_{{ layer.layer_id }}"
+                 checked
+                 hx-get="/check-connects/"
+                 hx-trigger="change"
+                 hx-target="#connects-info"
+                 hx-include="[name='layer_ids']:checked">
+          <label class="form-check-label" for="layer_{{ layer.layer_id }}">
+            {{ layer.name }} 
+            <small class="text-muted">[{{ layer.type }}] ~ {{ layer.distance.m|floatformat:0 }}m</small>
+          </label>
+        </div>
+      {% endfor %}
+    </div>
+    
+    <div id="connects-info" class="mt-3 mb-3">
+      <p class="text-info">
+        {% with selected_count=layers|length %}
+          {% if selected_count > user_connects %}
+            <span class="text-danger">Need {{ selected_count }} connects (you have {{ user_connects }})</span>
+          {% else %}
+            <span class="text-success">Will cost {{ selected_count }} connects</span>
+          {% endif %}
+        {% endwith %}
+      </p>
+    </div>
+    
+    <button type="submit" 
+            class="btn btn-primary btn-sm w-100"
+            {% if layers|length > user_connects %}disabled{% endif %}>
+      <span class="htmx-indicator">
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        Downloading...
+      </span>
+      <span class="htmx-indicator-hide">
+        Download Selected Layers
+      </span>
+    </button>
+  </form>
+{% else %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> No layers found within 500m of this location.
+  </div>
+{% endif %}
+
+<script>
+  // Handle HTMX events for this form
+  document.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.successful && evt.detail.xhr.getResponseHeader('Content-Type') === 'application/dxf') {
+      // Handle successful download
+      const blob = new Blob([evt.detail.xhr.response], { type: 'application/dxf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'layers_export.dxf';
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      // Close sidebar
+      document.getElementById('sidebar').classList.remove('active');
+    }
+  });
+</script>

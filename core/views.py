@@ -6,19 +6,20 @@ from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from django.contrib.gis.geos import Point, Polygon, GEOSGeometry
+from django.contrib.gis.geos import Point, GEOSGeometry
 from django.contrib.gis.db.models.functions import Distance
-from django.db.models import Q
-from .models import Layer, DownloadRecord, Server
 
-# Simple logger setup
+from .models import Layer, DownloadRecord
+
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Constants
-OFFSET_DEG = 0.01  # ~1km envelope for queries
-MAX_FEATURES_PREVIEW = 500  # Limit preview features
+
+# ~1km envelope for queries
+OFFSET_DEG = 0.01
+# Limit preview features
+MAX_FEATURES_PREVIEW = 500
 
 
 @login_required
@@ -89,10 +90,10 @@ def layer_preview_features(request):
                 'message': 'Area too large. Please zoom in.'
             })
 
-        # Fetch features from REST service
+
         features = fetch_layer_features(layer, minx, miny, maxx, maxy)
 
-        # Convert to GeoJSON
+
         geojson_features = []
         for geom in features[:MAX_FEATURES_PREVIEW]:
             if geom and geom.valid:
@@ -128,14 +129,14 @@ def nearby_layers(request):
     try:
         lat = float(request.GET.get('lat'))
         lng = float(request.GET.get('lng'))
-        dist = float(request.GET.get('dist', 2000))  # Default 2km radius
+        dist = float(request.GET.get('dist', 2000))
     except (TypeError, ValueError):
         return JsonResponse([], safe=False)
 
-    # Create point for distance calculation
+
     point = Point(lng, lat, srid=4326)
 
-    # First try to find layers with geometry within distance
+    #  trying to find layers with geometry within distance
     layers_with_geom = Layer.objects.annotate(
         distance=Distance('geometry', point)
     ).filter(
@@ -143,8 +144,7 @@ def nearby_layers(request):
         geometry__isnull=False
     ).select_related('server')
 
-    # Also find point layers that might only have offset coordinates
-    # Create a bounding box for the search area
+
     from django.db.models import Q
     import math
 
@@ -164,7 +164,7 @@ def nearby_layers(request):
 
     # Combine both querysets
     all_layers = list(layers_with_geom) + list(layers_with_offset)
-    # Remove duplicates
+
     seen = set()
     unique_layers = []
     for layer in all_layers:
@@ -173,7 +173,7 @@ def nearby_layers(request):
             unique_layers.append(layer)
 
     data = []
-    for layer in unique_layers[:30]:  # Limit to 30 nearest
+    for layer in unique_layers[:30]:
         try:
             # Calculate distance and centroid
             if hasattr(layer, 'distance') and layer.distance:
@@ -184,17 +184,17 @@ def nearby_layers(request):
                 else:
                     layer_lat, layer_lng = layer.offsetY, layer.offsetX
             else:
-                # For offset-only layers, calculate distance manually
+
                 if layer.offsetX and layer.offsetY:
                     layer_lat, layer_lng = layer.offsetY, layer.offsetX
-                    # Simple distance calculation
+
                     dx = (lng - layer_lng) * 111000 * math.cos(math.radians(lat))
                     dy = (lat - layer_lat) * 111000
                     distance_m = round(math.sqrt(dx * dx + dy * dy), 1)
                 else:
                     continue
 
-            # Skip if distance is too far (double-check)
+
             if distance_m > dist:
                 continue
 
@@ -232,7 +232,7 @@ def export_dxf_multi(request):
     maxx = request.POST.get('maxx')
     maxy = request.POST.get('maxy')
 
-    # Optional center point for download record
+
     lat = request.POST.get('lat')
     lng = request.POST.get('lng')
 
@@ -240,7 +240,7 @@ def export_dxf_multi(request):
         return JsonResponse({'error': 'No layers selected'}, status=400)
 
     try:
-        # Parse bounds
+
         minx, miny = float(minx), float(miny)
         maxx, maxy = float(maxx), float(maxy)
 
@@ -248,13 +248,13 @@ def export_dxf_multi(request):
         if lat and lng:
             lat, lng = float(lat), float(lng)
         else:
-            # Calculate center from bounds
+
             lat = (miny + maxy) / 2
             lng = (minx + maxx) / 2
 
-        # Check area size
+
         area = (maxx - minx) * (maxy - miny)
-        if area > 1.0:  # ~100km x 100km
+        if area > 1.0:
             return JsonResponse({
                 'error': 'Area too large. Please zoom in to a smaller area.'
             }, status=400)
@@ -350,10 +350,10 @@ def fetch_layer_features(layer, minx, miny, maxx, maxy):
     base_url = layer.server.url.rstrip('/')
     url = f"{base_url}/{layer.number}/query"
 
-    # Adjust query parameters based on layer type
+
     spatial_rel = 'esriSpatialRelIntersects'
     if layer.type == 'point':
-        # For points, use contains to get points within the envelope
+
         spatial_rel = 'esriSpatialRelContains'
 
     params = {
@@ -365,8 +365,8 @@ def fetch_layer_features(layer, minx, miny, maxx, maxy):
         'inSR': 4326,
         'outSR': 4326,
         'returnGeometry': 'true',
-        'outFields': '*',  # Get all fields
-        'maxRecordCount': 2000  # Increased limit
+        'outFields': '*',
+        'maxRecordCount': 2000
     }
 
     try:
@@ -382,7 +382,7 @@ def fetch_layer_features(layer, minx, miny, maxx, maxy):
 
         features = data.get('features', [])
 
-        # If no features but layer has offset coordinates, return offset point
+
         if not features and layer.type == 'point' and layer.offsetX and layer.offsetY:
             if (minx <= layer.offsetX <= maxx and miny <= layer.offsetY <= maxy):
                 try:
@@ -396,7 +396,7 @@ def fetch_layer_features(layer, minx, miny, maxx, maxy):
             geom_data = feature.get('geometry')
             if geom_data:
                 try:
-                    # Convert to GEOS geometry
+
                     geom = GEOSGeometry(json.dumps(geom_data))
                     if geom.valid:
                         geometries.append(geom)
@@ -465,7 +465,6 @@ def draw_geometry_to_dxf(msp, geom, layer_name):
         logger.error(f"Error drawing {geom_type}: {e}")
 
 
-# Optional: Additional utility endpoints
 
 @login_required
 def layer_info(request, layer_id):
@@ -498,9 +497,7 @@ def layer_info(request, layer_id):
 
 @login_required
 def check_connects(request):
-    """
-    Check user's available connects.
-    """
+
     connects = getattr(request.user, 'connects', 0)
     return JsonResponse({
         'connects': connects,

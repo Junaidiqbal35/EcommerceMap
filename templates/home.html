@@ -13,7 +13,7 @@
   No features in this area. Try zooming out or panning to a different location.
 </div>
 
-<!-- Enhanced Basemap Control -->
+<!-- Simplified Basemap Control -->
 <div class="basemap-control">
   <div class="basemap-header">
     <span>🗺️</span>
@@ -26,13 +26,8 @@
       <span>Streets</span>
     </label>
     <label class="basemap-option">
-      <input type="radio" name="basemap" value="satellite">
-      <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/9/307/238" alt="Satellite">
-      <span>Satellite</span>
-    </label>
-    <label class="basemap-option">
       <input type="radio" name="basemap" value="terrain">
-      <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}" alt="Terrain">
+      <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/9/307/238" alt="Terrain">
       <span>Terrain</span>
     </label>
     <label class="basemap-option">
@@ -40,15 +35,10 @@
       <img src="https://a.basemaps.cartocdn.com/dark_all/9/238/307.png" alt="Dark">
       <span>Dark Mode</span>
     </label>
-    <label class="basemap-option">
-      <input type="radio" name="basemap" value="light">
-      <img src="https://a.basemaps.cartocdn.com/light_all/9/238/307.png" alt="Light">
-      <span>Light Gray</span>
-    </label>
   </div>
 </div>
 
-<!-- Enhanced Layer Control Panel -->
+<!-- Simplified Layer Control Panel -->
 <div id="layerPanel">
   <div class="panel-header">
     <h4>
@@ -67,28 +57,6 @@
   </div>
   
   <div class="panel-content">
-    <!-- Search bar -->
-    <div class="layer-search">
-      <input type="text" id="layerSearch" placeholder="Search layers..." onkeyup="gisApp.filterLayers()">
-      <span class="layer-search-icon">🔍</span>
-    </div>
-    
-    <!-- Layer stats -->
-    <div class="layer-stats">
-      <div class="stat-item">
-        <div class="stat-value" id="totalLayers">0</div>
-        <div class="stat-label">Total</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="activeLayers">0</div>
-        <div class="stat-label">Active</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="visibleFeatures">0</div>
-        <div class="stat-label">Features</div>
-      </div>
-    </div>
-    
     <!-- Layer list -->
     <div id="layerList">
       <div class="spinner"></div>
@@ -103,12 +71,14 @@
     <button class="btn-close" onclick="gisApp.closeSidebar()">×</button>
   </div>
   <div class="sidebar-content">
-    <div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-radius: 8px; font-size: 13px;">
+    <div style="margin-bottom: 15px; padding: 10px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-radius: 8px; font-size: 13px; border: 1px solid rgba(102, 126, 234, 0.2);">
       <strong>Tip:</strong> Showing layers within 2km of clicked location
     </div>
     <form id="nearbyForm">
       <div id="nearbyList"></div>
-      <button type="submit" class="download-btn" style="width: 100%; margin-top: 20px; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 600;">
+      <button type="submit" class="download-btn" style="width: 100%; margin-top: 20px; padding: 12px; background: linear-gradient(135deg, rgb(102, 126, 234) 0%, rgb(118, 75, 162) 100%); color: white; border: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); transition: all 0.2s;" 
+              onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.4)'"
+              onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)'">
         <span>💾</span>
         <span>Download Selected</span>
       </button>
@@ -116,969 +86,62 @@
   </div>
 </div>
 
-<!-- Download Panel -->
-<div id="downloadPanel">
-  <div class="download-header">
-    <span>📥</span>
-    <span>Export Layers</span>
-  </div>
+<!-- Export Button (floating action button) -->
+<button id="exportFab" class="export-fab" onclick="gisApp.toggleExportPanel()" title="Export Layers" style="display: none;">
+  <span>💾</span>
+</button>
 
-  <select id="exportFormat" style="width: 100%; padding: 8px; margin-bottom: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
-    <option value="dxf">DXF (CAD)</option>
-    <option value="geojson">GeoJSON</option>
-  </select>
+{#<!-- Export Modal -->#}
+{#<div id="exportModal" class="export-modal">#}
+{#  <div class="export-modal-content">#}
+{#    <div class="export-modal-header">#}
+{#      <h3>Export Layers</h3>#}
+{#      <button class="btn-close" onclick="gisApp.toggleExportPanel()">×</button>#}
+{#    </div>#}
+{#    <div class="export-modal-body">#}
+{#      <div class="export-info" id="exportInfo">#}
+{#        <div class="export-count">0</div>#}
+{#        <div class="export-label">layers selected</div>#}
+{#      </div>#}
+{#      #}
+{#      <label for="exportFormat" style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b;">Export Format:</label>#}
+{#      <select id="exportFormat" style="width: 100%; padding: 10px; margin-bottom: 16px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 16px;">#}
+{#        <option value="dxf">DXF (CAD)</option>#}
+{#        <option value="geojson">GeoJSON</option>#}
+{#      </select>#}
+{#      #}
+{#      <button id="downloadBtn" class="export-btn" disabled onclick="gisApp.exportLayers()">#}
+{#        <span>💾</span>#}
+{#        <span>Export Selected Layers</span>#}
+{#      </button>#}
+{#      #}
+{#      <div class="export-cost" id="exportCost">#}
+{#        Cost: <strong>0 connects</strong>#}
+{#      </div>#}
+{#    </div>#}
+{#  </div>#}
+{#</div>#}
 
-  <button id="downloadBtn" disabled onclick="gisApp.exportLayers()">
-    <span>💾</span>
-    <span>Export Selected</span>
-  </button>
 
-  <div class="download-info" id="downloadInfo">
-    No layers selected
-  </div>
-</div>
 
 {% endblock %}
 
 {% block extrascript %}
+<!-- External map libraries -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-hash"></script>
 <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 <script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
 
-<script>
-// Enhanced GIS Application with all fixes
-const gisApp = (function() {
-  'use strict';
-  
-  // State management
-  const state = {
-    map: null,
-    layers: [],
-    activeLayers: {},
-    basemaps: {},
-    currentBasemap: 'osm',
-    selectedCount: 0,
-    clickedLocation: null,
-    updatePending: false,
-    isMinimized: false,
-    visibleFeatures: 0
-  };
-  
-  // Initialize map
-  function initMap() {
-    state.map = L.map('map').setView([-27.47, 153.02], 10);
-    
-    // Setup all basemaps
-    setupBasemaps();
-    
-    // Add default basemap
-    state.basemaps.osm.addTo(state.map);
-    
-    // Add hash for URL updates
-    const hash = new L.Hash(state.map);
-    
-    // Add geocoder control
-    L.Control.geocoder({
-      defaultMarkGeocode: false
-    }).on('markgeocode', function(e) {
-      const bbox = e.geocode.bbox;
-      const poly = L.polygon([
-        bbox.getSouthEast(),
-        bbox.getNorthEast(),
-        bbox.getNorthWest(),
-        bbox.getSouthWest()
-      ]);
-      state.map.fitBounds(poly.getBounds());
-    }).addTo(state.map);
-    
-    // Map click handler for nearby layers
-    state.map.on('click', handleMapClick);
-    
-    // Make layer panel draggable
-    makePanelDraggable('layerPanel');
-  }
-  
-  // Make panel draggable
-  function makePanelDraggable(panelId) {
-    const panel = document.getElementById(panelId);
-    const header = panel.querySelector('.panel-header');
-    let isDragging = false;
-    let startX, startY, initialX, initialY;
-    
-    header.addEventListener('mousedown', (e) => {
-      if (e.target.closest('button')) return;
-      isDragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      const rect = panel.getBoundingClientRect();
-      initialX = rect.left;
-      initialY = rect.top;
-      panel.style.transition = 'none';
-    });
-    
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      panel.style.left = initialX + dx + 'px';
-      panel.style.top = initialY + dy + 'px';
-      panel.style.right = 'auto';
-    });
-    
-    document.addEventListener('mouseup', () => {
-      isDragging = false;
-      panel.style.transition = '';
-    });
-  }
-  
-  // Setup all basemaps
-  function setupBasemaps() {
-    // OpenStreetMap
-    state.basemaps.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19
-    });
-    
-    // Satellite imagery
-    state.basemaps.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '© Esri',
-      maxZoom: 19
-    });
-    
-    // Terrain/Topographic
-    state.basemaps.terrain = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '© Esri',
-      maxZoom: 19
-    });
-    
-    // Dark mode
-    state.basemaps.dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
-      attribution: '© CARTO',
-      maxZoom: 19
-    });
-    
-    // Light gray
-    state.basemaps.light = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
-      attribution: '© CARTO',
-      maxZoom: 19
-    });
-  }
-  
-  // Load layers from server
-  async function loadLayers() {
-    try {
-      const response = await fetch('/all-layers/');
-      if (!response.ok) throw new Error('Failed to load layers');
-      
-      state.layers = await response.json();
-      renderLayerList();
-      updateStats();
-    } catch (error) {
-      console.error('Error loading layers:', error);
-      document.getElementById('layerList').innerHTML = 
-        '<div style="color: #ef4444; text-align: center; padding: 20px;">Failed to load layers. Please refresh.</div>';
-    }
-  }
-  
-  // Render layer list with tooltips
-  function renderLayerList() {
-    const container = document.getElementById('layerList');
-    const searchTerm = document.getElementById('layerSearch').value.toLowerCase();
-    
-    if (!state.layers.length) {
-      container.innerHTML = '<div style="text-align: center; color: #6c757d; padding: 20px;">No layers available</div>';
-      return;
-    }
-    
-    // Group layers by server
-    const grouped = {};
-    state.layers.forEach(layer => {
-      if (searchTerm && !layer.name.toLowerCase().includes(searchTerm)) {
-        return;
-      }
-      const server = layer.server_name || 'Unknown';
-      if (!grouped[server]) grouped[server] = [];
-      grouped[server].push(layer);
-    });
-    
-    let html = '';
-    Object.entries(grouped).forEach(([serverName, layers]) => {
-      if (layers.length === 0) return;
-      
-      html += `<div style="margin-bottom: 20px;">
-        <div style="font-size: 12px; font-weight: 600; color: #718096; margin-bottom: 8px; text-transform: uppercase;">
-          ${serverName} (${layers.length})
-        </div>`;
-      
-      layers.forEach(layer => {
-        const isActive = state.activeLayers[layer.id];
-        const typeIcon = getTypeIcon(layer.type);
-        
-        html += `
-          <div class="layer-item ${isActive ? 'active' : ''}" 
-               data-layer-id="${layer.id}"
-               title="${layer.name} - ${layer.type} layer from ${layer.server_name}">
-            <input type="checkbox" 
-                   class="layer-checkbox" 
-                   id="layer-${layer.id}"
-                   ${isActive ? 'checked' : ''}
-                   onclick="event.stopPropagation(); gisApp.toggleLayer(${layer.id})">
-            <div class="layer-info">
-              <div class="layer-name">${layer.name}</div>
-              <div class="layer-meta">
-                <span class="layer-type-badge">${typeIcon} ${layer.type}</span>
-              </div>
-            </div>
-            ${layer.centroid_lat && layer.centroid_lng ? 
-              `<button class="btn-zoom" onclick="event.stopPropagation(); gisApp.zoomToLayer(${layer.id})" title="Zoom to layer">
-                🔍
-              </button>` : ''}
-          </div>
-        `;
-      });
-      
-      html += '</div>';
-    });
-    
-    container.innerHTML = html || '<div style="text-align: center; color: #6c757d; padding: 20px;">No layers match your search</div>';
-  }
-  
-  // Filter layers by search
-  function filterLayers() {
-    renderLayerList();
-  }
-  
-  // Get type icon
-  function getTypeIcon(type) {
-    const icons = {
-      'point': '📍',
-      'polyline': '📏',
-      'polygon': '🏗️'
-    };
-    return icons[type] || '📄';
-  }
-  
-  // Toggle layer visibility - Fixed checkbox issue
-  async function toggleLayer(layerId) {
-    const layer = state.layers.find(l => l.id === layerId);
-    if (!layer) return;
-    
-    const checkbox = document.getElementById(`layer-${layerId}`);
-    const layerItem = document.querySelector(`.layer-item[data-layer-id="${layerId}"]`);
-    const isChecked = checkbox.checked;
-    
-    if (isChecked) {
-      layerItem.classList.add('active');
-      await addLayerToMap(layer);
-      state.selectedCount++;
-    } else {
-      layerItem.classList.remove('active');
-      removeLayerFromMap(layer);
-      state.selectedCount--;
-    }
-    
-    updateDownloadInfo();
-    updateStats();
-  }
-  
-  // Toggle minimize/maximize
-  function toggleMinimize() {
-    const panel = document.getElementById('layerPanel');
-    const icon = document.getElementById('minimizeIcon');
-    const downloadPanel = document.getElementById('downloadPanel');
-    
-    state.isMinimized = !state.isMinimized;
-    
-    if (state.isMinimized) {
-      panel.classList.add('minimized');
-      icon.textContent = '+';
-      downloadPanel.classList.remove('shifted');
-    } else {
-      panel.classList.remove('minimized');
-      icon.textContent = '−';
-      downloadPanel.classList.add('shifted');
-    }
-  }
-  
-  // Update statistics
-  function updateStats() {
-    document.getElementById('totalLayers').textContent = state.layers.length;
-    document.getElementById('activeLayers').textContent = Object.keys(state.activeLayers).length;
-    document.getElementById('visibleFeatures').textContent = state.visibleFeatures;
-    
-    // Update layer count in header
-    const activeCount = Object.keys(state.activeLayers).length;
-    const layerCount = document.getElementById('layerCount');
-    if (activeCount > 0) {
-      layerCount.textContent = `(${activeCount} active)`;
-    } else {
-      layerCount.textContent = '';
-    }
-  }
-  
-  // Add layer to map with proper error handling
-  async function addLayerToMap(layer) {
-    try {
-      // Store the layer data
-      const layerData = {
-        layer: layer,
-        features: new L.FeatureGroup(),
-        loadedBounds: null
-      };
-      
-      // Add to map first
-      layerData.features.addTo(state.map);
-      state.activeLayers[layer.id] = layerData;
-      
-      // Show loading indicator
-      const layerItem = document.querySelector(`.layer-item[data-layer-id="${layer.id}"]`);
-      layerItem.classList.add('layer-loading');
-      
-      // Load features for current view
-      await loadLayerFeatures(layer.id);
-      
-      // Remove loading indicator
-      layerItem.classList.remove('layer-loading');
-      
-      // Setup map move listener for this layer
-      if (!state.moveHandler) {
-        state.moveHandler = debounce(() => {
-          Object.keys(state.activeLayers).forEach(layerId => {
-            loadLayerFeatures(layerId);
-          });
-        }, 500);
-        
-        state.map.on('moveend', state.moveHandler);
-      }
-      
-      // If this is a point layer with offset coordinates, add a marker
-      if (layer.type === 'point' && layer.offsetX && layer.offsetY && 
-          layer.offsetX !== 0 && layer.offsetY !== 0) {
-        const marker = L.circleMarker([layer.offsetY, layer.offsetX], {
-          radius: 8,
-          fillColor: '#ff0000',
-          color: '#fff',
-          weight: 2,
-          opacity: 1,
-          fillOpacity: 0.8,
-          isReference: true
-        });
-        marker.bindPopup(`<strong>${layer.name}</strong><br>Reference Point`);
-        layerData.features.addLayer(marker);
-      }
-      
-    } catch (error) {
-      console.error('Error adding layer:', error);
-      // Uncheck if failed
-      document.getElementById(`layer-${layer.id}`).checked = false;
-      document.querySelector(`.layer-item[data-layer-id="${layer.id}"]`).classList.remove('active');
-      alert(`Failed to load layer: ${layer.name}`);
-    }
-  }
-  
-  // Load features for a specific layer
-  async function loadLayerFeatures(layerId) {
-    const layerData = state.activeLayers[layerId];
-    if (!layerData) return;
-    
-    const bounds = state.map.getBounds();
-    const zoom = state.map.getZoom();
-    
-    // Don't reload if we've already loaded this area
-    if (layerData.loadedBounds && 
-        layerData.loadedBounds.contains(bounds) && 
-        Math.abs(layerData.lastZoom - zoom) < 2) {
-      return;
-    }
-    
-    // Expand bounds slightly to avoid constant reloading
-    const expanded = bounds.pad(0.2);
-    
-    try {
-      const params = new URLSearchParams({
-        layer_id: layerId,
-        minx: expanded.getWest(),
-        miny: expanded.getSouth(),
-        maxx: expanded.getEast(),
-        maxy: expanded.getNorth()
-      });
-      
-      const response = await fetch(`/layer-preview-features/?${params}`);
-      if (!response.ok) throw new Error('Failed to load features');
-      
-      const geojson = await response.json();
-      
-      // Clear existing features (except reference point)
-      layerData.features.eachLayer(layer => {
-        if (!layer.options.isReference) {
-          layerData.features.removeLayer(layer);
-        }
-      });
-      
-      // Add new features
-      if (geojson.features && geojson.features.length > 0) {
-        const newFeatures = L.geoJSON(geojson, {
-          style: getLayerStyle(layerData.layer),
-          pointToLayer: (feature, latlng) => {
-            return L.circleMarker(latlng, {
-              radius: 6,
-              fillColor: getLayerColor(layerData.layer.type),
-              color: '#fff',
-              weight: 2,
-              opacity: 1,
-              fillOpacity: 0.8
-            });
-          },
-          onEachFeature: (feature, leafletLayer) => {
-            // Create enhanced popup with download button
-            const coords = leafletLayer.getLatLng ? leafletLayer.getLatLng() : null;
-            const popupContent = `
-              <div class="popup-header">
-                <h4 class="popup-title">${feature.properties.layer_name || layerData.layer.name}</h4>
-              </div>
-              <div class="popup-body">
-                <div class="popup-info">
-                  <strong>Type:</strong> ${feature.properties.layer_type || layerData.layer.type}<br>
-                  <strong>Server:</strong> ${layerData.layer.server_name}<br>
-                  ${feature.properties.id ? `<strong>Feature ID:</strong> ${feature.properties.id}<br>` : ''}
-                  ${coords ? `<strong>Location:</strong> ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}<br>` : ''}
-                </div>
-                <div class="popup-actions">
-                  <button class="popup-btn popup-btn-primary" onclick="gisApp.downloadSingleFeature(${layerId}, '${coords ? coords.lat + ',' + coords.lng : ''}')">
-                    💾 Download
-                  </button>
-                  ${coords ? `<button class="popup-btn popup-btn-secondary" onclick="gisApp.zoomToFeature(${coords.lat}, ${coords.lng})">
-                    🔍 Zoom
-                  </button>` : ''}
-                </div>
-              </div>
-            `;
-            leafletLayer.bindPopup(popupContent, {
-              maxWidth: 300,
-              className: 'custom-popup'
-            });
-            
-            // Tooltip for hover
-            leafletLayer.bindTooltip(layerData.layer.name, {
-              permanent: false,
-              direction: 'top',
-              offset: [0, -10]
-            });
-          }
-        });
-        
-        newFeatures.eachLayer(layer => {
-          layerData.features.addLayer(layer);
-        });
-        
-        // Update loaded bounds
-        layerData.loadedBounds = expanded;
-        layerData.lastZoom = zoom;
-        
-        // Update feature count in UI
-        updateFeatureCount(layerId, geojson.features.length);
-        
-        // Update total visible features
-        updateVisibleFeatures();
-        
-        // Check if any active layers have features
-        checkForNoFeatures();
-      } else {
-        updateFeatureCount(layerId, 0);
-        updateVisibleFeatures();
-        checkForNoFeatures();
-      }
-      
-    } catch (error) {
-      console.error('Error loading features:', error);
-    }
-  }
-  
-  // Update visible features count
-  function updateVisibleFeatures() {
-    let total = 0;
-    Object.values(state.activeLayers).forEach(layerData => {
-      if (layerData.features) {
-        layerData.features.eachLayer(() => total++);
-      }
-    });
-    state.visibleFeatures = total;
-    updateStats();
-  }
-  
-  // Update feature count display
-  function updateFeatureCount(layerId, count) {
-    const layerItem = document.querySelector(`.layer-item[data-layer-id="${layerId}"]`);
-    if (!layerItem) return;
-    
-    // Remove existing count
-    const existingCount = layerItem.querySelector('.feature-count');
-    if (existingCount) {
-      existingCount.remove();
-    }
-    
-    // Add new count
-    if (count > 0) {
-      const countSpan = document.createElement('span');
-      countSpan.className = 'feature-count';
-      countSpan.textContent = count > 999 ? '999+' : count;
-      layerItem.querySelector('.layer-meta').appendChild(countSpan);
-    }
-  }
-  
-  // Check if no features are visible
-  function checkForNoFeatures() {
-    let totalFeatures = 0;
-    Object.values(state.activeLayers).forEach(layerData => {
-      if (layerData.features) {
-        layerData.features.eachLayer(() => totalFeatures++);
-      }
-    });
-    
-    const message = document.getElementById('noFeaturesMessage');
-    if (Object.keys(state.activeLayers).length > 0 && totalFeatures === 0) {
-      message.style.display = 'block';
-      setTimeout(() => {
-        message.style.display = 'none';
-      }, 5000);
-    } else {
-      message.style.display = 'none';
-    }
-  }
-  
-  // Debounce function
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
-  
-  // Remove layer from map
-  function removeLayerFromMap(layer) {
-    const layerData = state.activeLayers[layer.id];
-    if (layerData) {
-      state.map.removeLayer(layerData.features);
-      delete state.activeLayers[layer.id];
-      
-      // Remove move handler if no layers active
-      if (Object.keys(state.activeLayers).length === 0 && state.moveHandler) {
-        state.map.off('moveend', state.moveHandler);
-        state.moveHandler = null;
-      }
-      
-      updateVisibleFeatures();
-    }
-  }
-  
-  // Get layer style
-  function getLayerStyle(layer) {
-    const colors = {
-      polygon: '#3388ff',
-      polyline: '#ff7800',
-      point: '#51bbd6'
-    };
-    
-    return {
-      color: colors[layer.type] || '#3388ff',
-      weight: layer.type === 'polygon' ? 2 : 3,
-      opacity: 0.8,
-      fillOpacity: layer.type === 'polygon' ? 0.3 : 0.7
-    };
-  }
-  
-  // Get layer color
-  function getLayerColor(type) {
-    const colors = {
-      'point': '#e74c3c',
-      'polyline': '#f39c12',
-      'polygon': '#3498db'
-    };
-    return colors[type] || '#95a5a6';
-  }
-  
-  // Zoom to layer
-  function zoomToLayer(layerId) {
-    const layer = state.layers.find(l => l.id === layerId);
-    if (!layer || !layer.centroid_lat || !layer.centroid_lng) return;
-    
-    // Smooth zoom animation
-    state.map.flyTo([layer.centroid_lat, layer.centroid_lng], 15, {
-      duration: 1.5
-    });
-    
-    // Activate layer if not already active
-    if (!state.activeLayers[layerId]) {
-      const checkbox = document.getElementById(`layer-${layerId}`);
-      if (checkbox && !checkbox.checked) {
-        checkbox.checked = true;
-        toggleLayer(layerId);
-      }
-    }
-  }
-  
-  // Zoom to feature
-  function zoomToFeature(lat, lng) {
-    state.map.flyTo([lat, lng], 18, {
-      duration: 1
-    });
-  }
-  
-  // Download single feature
-  async function downloadSingleFeature(layerId, coords) {
-    try {
-      const layer = state.layers.find(l => l.id === layerId);
-      if (!layer) return;
-      
-      // Parse coordinates
-      const [lat, lng] = coords.split(',').map(parseFloat);
-      const offset = 0.001; // ~100m
-      
-      const formData = new FormData();
-      formData.append('layer_ids[]', layerId);
-      formData.append('minx', lng - offset);
-      formData.append('miny', lat - offset);
-      formData.append('maxx', lng + offset);
-      formData.append('maxy', lat + offset);
-      
-      const response = await fetch('/export-dxf-multi/', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Download failed');
-      }
-      
-      const blob = await response.blob();
-      downloadFile(blob, `${layer.name}_feature.dxf`);
-      
-    } catch (error) {
-      alert('Download failed: ' + error.message);
-    }
-  }
-  
-  // Handle map click for nearby layers
-  async function handleMapClick(e) {
-    state.clickedLocation = e.latlng;
-    await showNearbyLayers(e.latlng.lat, e.latlng.lng);
-  }
-  
-  // Show nearby layers sidebar with increased radius
-  async function showNearbyLayers(lat, lng) {
-    const sidebar = document.getElementById('sidebar');
-    const list = document.getElementById('nearbyList');
-    
-    sidebar.classList.add('active');
-    list.innerHTML = '<div class="spinner"></div>';
-    
-    try {
-      // Increased search radius to 2000m (2km)
-      const response = await fetch(`/nearby-layers/?lat=${lat}&lng=${lng}&dist=2000`);
-      const layers = await response.json();
-      
-      if (!layers || !layers.length) {
-        list.innerHTML = `
-          <div style="text-align: center; color: #718096; padding: 20px;">
-            <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
-            <div>No layers found within 2km</div>
-            <div style="font-size: 12px; margin-top: 10px;">Try clicking in a different area</div>
-          </div>
-        `;
-        return;
-      }
-      
-      let html = '';
-      layers.forEach(layer => {
-        const typeIcon = getTypeIcon(layer.type);
-        const distance = layer.distance_m ? Math.round(layer.distance_m) : 0;
-        html += `
-          <div class="nearby-layer-item">
-            <label>
-              <input type="checkbox" value="${layer.id}" checked>
-              <div class="nearby-info">
-                <div class="nearby-name">${typeIcon} ${layer.name}</div>
-                <div class="nearby-distance">
-                  ${layer.type} • ${distance}m away • ${layer.server_name}
-                </div>
-              </div>
-            </label>
-          </div>
-        `;
-      });
-      
-      list.innerHTML = html;
-      
-    } catch (error) {
-      console.error('Failed to load nearby layers:', error);
-      list.innerHTML = '<div style="color: #ef4444; text-align: center;">Failed to load nearby layers</div>';
-    }
-  }
-  
-  // Close sidebar
-  function closeSidebar() {
-    document.getElementById('sidebar').classList.remove('active');
-  }
-  
-  // Export selected layers
-  async function exportLayers() {
-    const format = document.getElementById('exportFormat').value;
-    const selectedIds = Object.keys(state.activeLayers);
-    
-    if (!selectedIds.length) {
-      alert('Please select at least one layer to export');
-      return;
-    }
-    
-    const btn = document.getElementById('downloadBtn');
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span>⏳</span><span>Exporting...</span>';
-    
-    try {
-      if (format === 'dxf') {
-        await exportAsDXF(selectedIds);
-      } else {
-        exportAsGeoJSON(selectedIds);
-      }
-    } catch (error) {
-      console.error('Export error:', error);
-      alert('Export failed: ' + error.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-    }
-  }
-  
-  // Export as DXF
-  async function exportAsDXF(layerIds) {
-    const formData = new FormData();
-    layerIds.forEach(id => formData.append('layer_ids[]', id));
-    
-    const bounds = state.map.getBounds();
-    formData.append('minx', bounds.getWest());
-    formData.append('miny', bounds.getSouth());
-    formData.append('maxx', bounds.getEast());
-    formData.append('maxy', bounds.getNorth());
-    
-    const response = await fetch('/export-dxf-multi/', {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Export failed');
-    }
-    
-    const blob = await response.blob();
-    downloadFile(blob, `gis_export_${new Date().toISOString().slice(0, 10)}.dxf`);
-  }
-  
-  // Export as GeoJSON
-  function exportAsGeoJSON(layerIds) {
-    const features = [];
-    
-    layerIds.forEach(id => {
-      const layerData = state.activeLayers[id];
-      if (layerData && layerData.features) {
-        layerData.features.eachLayer(layer => {
-          if (layer.feature) {
-            features.push(layer.feature);
-          } else if (layer.toGeoJSON) {
-            // Convert to GeoJSON if it's a regular layer
-            const geoJson = layer.toGeoJSON();
-            if (geoJson) {
-              features.push(geoJson);
-            }
-          }
-        });
-      }
-    });
-    
-    const geojson = {
-      type: 'FeatureCollection',
-      features: features
-    };
-    
-    const blob = new Blob([JSON.stringify(geojson, null, 2)], {type: 'application/json'});
-    downloadFile(blob, `gis_export_${new Date().toISOString().slice(0, 10)}.geojson`);
-  }
-  
-  // Download nearby layers
-  async function downloadNearbyLayers(e) {
-    e.preventDefault();
-    
-    const checkboxes = document.querySelectorAll('#nearbyList input:checked');
-    if (!checkboxes.length) {
-      alert('Please select at least one layer');
-      return;
-    }
-    
-    const btn = e.target.querySelector('button[type="submit"]');
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span>⏳</span><span>Downloading...</span>';
-    
-    try {
-      const formData = new FormData();
-      checkboxes.forEach(cb => formData.append('layer_ids[]', cb.value));
-      
-      if (state.clickedLocation) {
-        formData.append('lat', state.clickedLocation.lat);
-        formData.append('lng', state.clickedLocation.lng);
-      }
-      
-      // Larger area around clicked point (2km radius)
-      const offset = 0.02; // ~2km
-      formData.append('minx', state.clickedLocation.lng - offset);
-      formData.append('miny', state.clickedLocation.lat - offset);
-      formData.append('maxx', state.clickedLocation.lng + offset);
-      formData.append('maxy', state.clickedLocation.lat + offset);
-      
-      const response = await fetch('/export-dxf-multi/', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Download failed');
-      }
-      
-      const blob = await response.blob();
-      downloadFile(blob, `nearby_layers_${new Date().toISOString().slice(0, 10)}.dxf`);
-      
-      closeSidebar();
-      
-    } catch (error) {
-      alert('Download failed: ' + error.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-    }
-  }
-  
-  // Helper to download file
-  function downloadFile(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-  
-  // Update download info
-  function updateDownloadInfo() {
-    const info = document.getElementById('downloadInfo');
-    const btn = document.getElementById('downloadBtn');
-    const panel = document.getElementById('downloadPanel');
-    
-    // Adjust position based on layer panel state
-    if (!state.isMinimized && state.selectedCount > 0) {
-      panel.classList.add('shifted');
-    } else {
-      panel.classList.remove('shifted');
-    }
-    
-    if (state.selectedCount > 0) {
-      info.innerHTML = `<strong>${state.selectedCount}</strong> layers selected<br>
-                       <small>Cost: ${state.selectedCount} connects</small>`;
-      btn.disabled = false;
-    } else {
-      info.textContent = 'No layers selected';
-      btn.disabled = true;
-    }
-  }
-  
-  // Refresh layers
-  function refreshLayers() {
-    // Show loading
-    document.getElementById('layerList').innerHTML = '<div class="spinner"></div>';
-    loadLayers();
-  }
-  
-  // Switch basemap
-  function switchBasemap(name) {
-    if (state.basemaps[state.currentBasemap]) {
-      state.map.removeLayer(state.basemaps[state.currentBasemap]);
-    }
-    
-    state.currentBasemap = name;
-    if (state.basemaps[name]) {
-      state.basemaps[name].addTo(state.map);
-    }
-  }
-  
-  // Setup event handlers
-  function bindEvents() {
-    // Basemap switcher
-    document.querySelectorAll('input[name="basemap"]').forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        if (e.target.checked) {
-          switchBasemap(e.target.value);
-        }
-      });
-    });
-    
-    // Nearby layers form
-    document.getElementById('nearbyForm').addEventListener('submit', downloadNearbyLayers);
-    
-    // Basemap control hover effect
-    const basemapControl = document.querySelector('.basemap-control');
-    const basemapOptions = document.querySelector('.basemap-options');
-    
-    basemapControl.addEventListener('mouseenter', () => {
-      basemapOptions.classList.add('active');
-    });
-    
-    basemapControl.addEventListener('mouseleave', () => {
-      basemapOptions.classList.remove('active');
-    });
-    
-    // Layer item click to toggle
-    document.getElementById('layerList').addEventListener('click', (e) => {
-      const layerItem = e.target.closest('.layer-item');
-      if (layerItem && !e.target.closest('input') && !e.target.closest('button')) {
-        const checkbox = layerItem.querySelector('.layer-checkbox');
-        checkbox.click();
-      }
-    });
-  }
-  
-  // Initialize application
-  function init() {
-    initMap();
-    loadLayers();
-    bindEvents();
-  }
-  
-  // Public API
-  return {
-    init: init,
-    toggleLayer: toggleLayer,
-    zoomToLayer: zoomToLayer,
-    zoomToFeature: zoomToFeature,
-    downloadSingleFeature: downloadSingleFeature,
-    exportLayers: exportLayers,
-    refreshLayers: refreshLayers,
-    closeSidebar: closeSidebar,
-    toggleMinimize: toggleMinimize,
-    filterLayers: filterLayers
-  };
-})();
+<!-- Your custom GIS application script -->
+<script src="{% static 'js/gis.js' %}"></script>
 
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', gisApp.init);
+<!-- Initialize the application -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    gisApp.init();
+});
+
+
 </script>
 {% endblock %}

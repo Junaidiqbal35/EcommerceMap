@@ -120,102 +120,6 @@ def layer_preview_features(request):
         return JsonResponse({'error': 'Failed to load preview'}, status=500)
 
 
-@login_required
-def nearby_layers(request):
-    """
-    Return layers near a point with distance information.
-    Enhanced to find more layers including those with offset coordinates.
-    """
-    try:
-        lat = float(request.GET.get('lat'))
-        lng = float(request.GET.get('lng'))
-        dist = float(request.GET.get('dist', 2000))
-    except (TypeError, ValueError):
-        return JsonResponse([], safe=False)
-
-
-    point = Point(lng, lat, srid=4326)
-
-    #  trying to find layers with geometry within distance
-    layers_with_geom = Layer.objects.annotate(
-        distance=Distance('geometry', point)
-    ).filter(
-        distance__lte=dist,
-        geometry__isnull=False
-    ).select_related('server')
-
-
-    from django.db.models import Q
-    import math
-
-    # Rough conversion: 1 degree ≈ 111km
-    degree_offset = dist / 111000.0
-
-    layers_with_offset = Layer.objects.filter(
-        Q(type='point') &
-        Q(offsetX__gte=lng - degree_offset) &
-        Q(offsetX__lte=lng + degree_offset) &
-        Q(offsetY__gte=lat - degree_offset) &
-        Q(offsetY__lte=lat + degree_offset) &
-        Q(offsetX__isnull=False) &
-        Q(offsetY__isnull=False) &
-        ~Q(offsetX=0, offsetY=0)
-    ).select_related('server')
-
-    # Combine both querysets
-    all_layers = list(layers_with_geom) + list(layers_with_offset)
-
-    seen = set()
-    unique_layers = []
-    for layer in all_layers:
-        if layer.layer_id not in seen:
-            seen.add(layer.layer_id)
-            unique_layers.append(layer)
-
-    data = []
-    for layer in unique_layers[:30]:
-        try:
-            # Calculate distance and centroid
-            if hasattr(layer, 'distance') and layer.distance:
-                distance_m = round(layer.distance.m, 1)
-                if layer.geometry:
-                    centroid = layer.geometry.centroid
-                    layer_lat, layer_lng = centroid.y, centroid.x
-                else:
-                    layer_lat, layer_lng = layer.offsetY, layer.offsetX
-            else:
-
-                if layer.offsetX and layer.offsetY:
-                    layer_lat, layer_lng = layer.offsetY, layer.offsetX
-
-                    dx = (lng - layer_lng) * 111000 * math.cos(math.radians(lat))
-                    dy = (lat - layer_lat) * 111000
-                    distance_m = round(math.sqrt(dx * dx + dy * dy), 1)
-                else:
-                    continue
-
-
-            if distance_m > dist:
-                continue
-
-            data.append({
-                'id': layer.layer_id,
-                'name': layer.name,
-                'type': layer.type,
-                'server_name': layer.server.name if layer.server else 'Unknown',
-                'lat': layer_lat,
-                'lng': layer_lng,
-                'distance_m': distance_m
-            })
-        except Exception as e:
-            logger.debug(f"Error processing layer {layer.layer_id}: {e}")
-            continue
-
-    # Sort by distance
-    data.sort(key=lambda x: x['distance_m'])
-
-    return JsonResponse(data[:20], safe=False)  # Return top 20
-
 
 @login_required
 @csrf_exempt
@@ -322,12 +226,165 @@ def export_dxf_multi(request):
         return JsonResponse({'error': 'Export failed. Please try again.'}, status=500)
 
 
-def fetch_layer_features(layer, minx, miny, maxx, maxy):
+@login_required
+def nearby_layers(request):
+    """
+    Return layers that have actual features near the clicked point.
+    This checks for real features, not just layer metadata.
+    """
+    try:
+        lat = float(request.GET.get('lat'))
+        lng = float(request.GET.get('lng'))
+        dist = float(request.GET.get('dist', 5000))  # 5km default
+    except (TypeError, ValueError):
+        return JsonResponse([], safe=False)
+
+    # Convert distance to degrees (rough approximation)
+    degree_offset = dist / 111000.0  # 1 degree ≈ 111km
+
+    # Query bounds around clicked point
+    minx = lng - degree_offset
+    maxx = lng + degree_offset
+    miny = lat - degree_offset
+    maxy = lat + degree_offset
+
+    # Get all layers
+    layers = Layer.objects.select_related('server').all()
+
+    data = []
+
+    for layer in layers:
+        try:
+            # Check if this layer has features at clicked location
+            features = fetch_layer_features(layer, minx, miny, maxx, maxy, limit=5)  # Just check for existence
+
+            if features:
+                # Calculate distance to first feature
+                first_feature = features[0]
+                feature_lat = feature_lng = lat  # Default to clicked location
+
+                try:
+                    if first_feature.geom_type == 'Point':
+                        feature_lat, feature_lng = first_feature.y, first_feature.x
+                    else:
+                        centroid = first_feature.centroid
+                        feature_lat, feature_lng = centroid.y, centroid.x
+
+                    # Calculate distance
+                    import math
+                    dx = (lng - feature_lng) * 111000 * math.cos(math.radians(lat))
+                    dy = (lat - feature_lat) * 111000
+                    distance_m = round(math.sqrt(dx * dx + dy * dy), 1)
+                except:
+                    distance_m = 0
+
+                data.append({
+                    'id': layer.layer_id,
+                    'name': layer.name,
+                    'type': layer.type,
+                    'server_name': layer.server.name if layer.server else 'Unknown',
+                    'distance_m': distance_m,
+                    'feature_count': len(features)
+                })
+        except Exception as e:
+            logger.debug(f"Error checking layer {layer.layer_id}: {e}")
+            continue
+
+    # Sort by distance
+    data.sort(key=lambda x: x['distance_m'])
+
+    return JsonResponse(data[:20], safe=False)  # Return top 20 layers with features
+
+
+@login_required
+def layer_feature_bounds(request):
+    """
+    Get the bounds of features for a layer in the current viewport.
+    Used for auto-zooming to layer features.
+    """
+    layer_id = request.GET.get('layer_id')
+    minx = request.GET.get('minx')
+    miny = request.GET.get('miny')
+    maxx = request.GET.get('maxx')
+    maxy = request.GET.get('maxy')
+
+    if not all([layer_id, minx, miny, maxx, maxy]):
+        return JsonResponse({'error': 'Missing parameters'}, status=400)
+
+    try:
+        layer = get_object_or_404(Layer, layer_id=layer_id)
+        minx, miny, maxx, maxy = float(minx), float(miny), float(maxx), float(maxy)
+
+        # Get features in current view
+        features = fetch_layer_features(layer, minx, miny, maxx, maxy)
+
+        if not features:
+            # No features in current view, try larger area
+            expand = 0.1  # Expand by 10%
+            width = maxx - minx
+            height = maxy - miny
+            minx -= width * expand
+            maxx += width * expand
+            miny -= height * expand
+            maxy += height * expand
+
+            features = fetch_layer_features(layer, minx, miny, maxx, maxy)
+
+        if features:
+            # Calculate bounds of all features
+            bounds_minx = bounds_miny = float('inf')
+            bounds_maxx = bounds_maxy = float('-inf')
+
+            for geom in features:
+                extent = geom.extent  # (minx, miny, maxx, maxy)
+                bounds_minx = min(bounds_minx, extent[0])
+                bounds_miny = min(bounds_miny, extent[1])
+                bounds_maxx = max(bounds_maxx, extent[2])
+                bounds_maxy = max(bounds_maxy, extent[3])
+
+            return JsonResponse({
+                'bounds': {
+                    'minx': bounds_minx,
+                    'miny': bounds_miny,
+                    'maxx': bounds_maxx,
+                    'maxy': bounds_maxy
+                },
+                'feature_count': len(features)
+            })
+        else:
+            # No features found, return layer centroid if available
+            if layer.offsetX and layer.offsetY and layer.offsetX != 0:
+                return JsonResponse({
+                    'center': {
+                        'lat': layer.offsetY,
+                        'lng': layer.offsetX
+                    },
+                    'feature_count': 0
+                })
+            elif layer.geometry:
+                centroid = layer.geometry.centroid
+                return JsonResponse({
+                    'center': {
+                        'lat': centroid.y,
+                        'lng': centroid.x
+                    },
+                    'feature_count': 0
+                })
+            else:
+                return JsonResponse({'error': 'No features found'}, status=404)
+
+    except Exception as e:
+        logger.error(f"Error getting feature bounds: {e}")
+        return JsonResponse({'error': 'Failed to get bounds'}, status=500)
+
+
+# Update the fetch_layer_features function to accept a limit parameter
+def fetch_layer_features(layer, minx, miny, maxx, maxy, limit=2000):
     """
     Fetch features from ArcGIS REST service.
     Returns list of GEOS geometries.
 
-    Enhanced to handle different layer types and offset coordinates.
+    Added limit parameter to control max features returned.
     """
     if not layer.server:
         return []
@@ -350,11 +407,8 @@ def fetch_layer_features(layer, minx, miny, maxx, maxy):
     base_url = layer.server.url.rstrip('/')
     url = f"{base_url}/{layer.number}/query"
 
-
+    # Use intersects for all geometry types
     spatial_rel = 'esriSpatialRelIntersects'
-    if layer.type == 'point':
-
-        spatial_rel = 'esriSpatialRelContains'
 
     params = {
         'f': 'geojson',
@@ -366,7 +420,7 @@ def fetch_layer_features(layer, minx, miny, maxx, maxy):
         'outSR': 4326,
         'returnGeometry': 'true',
         'outFields': '*',
-        'maxRecordCount': 2000
+        'maxRecordCount': limit
     }
 
     try:
@@ -382,7 +436,7 @@ def fetch_layer_features(layer, minx, miny, maxx, maxy):
 
         features = data.get('features', [])
 
-
+        # If no features found and layer has offset coordinates, check if offset is in bounds
         if not features and layer.type == 'point' and layer.offsetX and layer.offsetY:
             if (minx <= layer.offsetX <= maxx and miny <= layer.offsetY <= maxy):
                 try:
@@ -392,11 +446,10 @@ def fetch_layer_features(layer, minx, miny, maxx, maxy):
                     pass
 
         geometries = []
-        for feature in features:
+        for feature in features[:limit]:  # Respect limit
             geom_data = feature.get('geometry')
             if geom_data:
                 try:
-
                     geom = GEOSGeometry(json.dumps(geom_data))
                     if geom.valid:
                         geometries.append(geom)
@@ -415,8 +468,6 @@ def fetch_layer_features(layer, minx, miny, maxx, maxy):
     except Exception as e:
         logger.error(f"Failed to fetch features for {layer.name}: {e}")
         return []
-
-
 def draw_geometry_to_dxf(msp, geom, layer_name):
     """
     Draw a GEOS geometry to DXF modelspace.

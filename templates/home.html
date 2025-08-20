@@ -8,12 +8,9 @@
 <!-- Map Container -->
 <div id="map"></div>
 
-<!-- No features message -->
-<div id="noFeaturesMessage" class="no-features-message">
-  No features in this area. Try zooming out or panning to a different location.
-</div>
+<!-- Toast Container (dynamically added) -->
 
-<!-- Simplified Basemap Control -->
+<!-- Improved Basemap Control -->
 <div class="basemap-control">
   <div class="basemap-header">
     <span>🗺️</span>
@@ -38,13 +35,13 @@
   </div>
 </div>
 
-<!-- Simplified Layer Control Panel -->
+<!-- Improved Layer Control Panel -->
 <div id="layerPanel">
   <div class="panel-header">
     <h4>
       <span>🗺️</span>
       <span>Layers</span>
-      <span id="layerCount" style="font-size: 14px; font-weight: normal;"></span>
+      <span id="layerCount"></span>
     </h4>
     <div class="panel-controls">
       <button class="btn-control" onclick="gisApp.toggleMinimize()" title="Minimize">
@@ -57,28 +54,52 @@
   </div>
   
   <div class="panel-content">
-    <!-- Layer list -->
+    <!-- User connects display -->
+    <div style="padding: 8px; background: rgba(102, 126, 234, 0.1); border-radius: 8px; margin-bottom: 12px; border: 1px solid rgba(102, 126, 234, 0.2);">
+      <div style="display: flex; justify-content: space-between; align-items: center; color: white; font-size: 13px;">
+        <span>Your Connects:</span>
+        <span class="user-connects" style="font-weight: 600; color: #667eea;">Loading...</span>
+      </div>
+    </div>
+    
+    <!-- Layer list will be populated here -->
     <div id="layerList">
       <div class="spinner"></div>
     </div>
   </div>
 </div>
 
-<!-- Nearby Layers Sidebar -->
+<!-- Improved Nearby Layers Sidebar -->
 <div id="sidebar">
   <div class="sidebar-header">
-    <h5>📍 Nearby Layers</h5>
+    <h5>🔍 Nearby Layers</h5>
     <button class="btn-close" onclick="gisApp.closeSidebar()">×</button>
   </div>
   <div class="sidebar-content">
-    <div style="margin-bottom: 15px; padding: 10px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-radius: 8px; font-size: 13px; border: 1px solid rgba(102, 126, 234, 0.2);">
-      <strong>Tip:</strong> Showing layers within 2km of clicked location
-    </div>
     <form id="nearbyForm">
       <div id="nearbyList"></div>
-      <button type="submit" class="download-btn" style="width: 100%; margin-top: 20px; padding: 12px; background: linear-gradient(135deg, rgb(102, 126, 234) 0%, rgb(118, 75, 162) 100%); color: white; border: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); transition: all 0.2s;" 
-              onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.4)'"
-              onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)'">
+      
+      <!-- Download Summary -->
+      <div class="download-summary" id="downloadSummary">
+        <div class="summary-row">
+          <span>Selected Layers:</span>
+          <span>0</span>
+        </div>
+        <div class="summary-row">
+          <span>Connect Cost:</span>
+          <span class="cost-value">0 connects</span>
+        </div>
+        <div class="summary-row">
+          <span>Your Connects:</span>
+          <span class="cost-value user-connects">0</span>
+        </div>
+        <div class="summary-row">
+          <span>After Download:</span>
+          <span class="cost-value">0</span>
+        </div>
+      </div>
+      
+      <button type="submit" class="download-btn">
         <span>💾</span>
         <span>Download Selected</span>
       </button>
@@ -86,43 +107,9 @@
   </div>
 </div>
 
-<!-- Export Button (floating action button) -->
-<button id="exportFab" class="export-fab" onclick="gisApp.toggleExportPanel()" title="Export Layers" style="display: none;">
-  <span>💾</span>
-</button>
+<!-- Loading/Progress Indicator (dynamically added) -->
 
-{#<!-- Export Modal -->#}
-{#<div id="exportModal" class="export-modal">#}
-{#  <div class="export-modal-content">#}
-{#    <div class="export-modal-header">#}
-{#      <h3>Export Layers</h3>#}
-{#      <button class="btn-close" onclick="gisApp.toggleExportPanel()">×</button>#}
-{#    </div>#}
-{#    <div class="export-modal-body">#}
-{#      <div class="export-info" id="exportInfo">#}
-{#        <div class="export-count">0</div>#}
-{#        <div class="export-label">layers selected</div>#}
-{#      </div>#}
-{#      #}
-{#      <label for="exportFormat" style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b;">Export Format:</label>#}
-{#      <select id="exportFormat" style="width: 100%; padding: 10px; margin-bottom: 16px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 16px;">#}
-{#        <option value="dxf">DXF (CAD)</option>#}
-{#        <option value="geojson">GeoJSON</option>#}
-{#      </select>#}
-{#      #}
-{#      <button id="downloadBtn" class="export-btn" disabled onclick="gisApp.exportLayers()">#}
-{#        <span>💾</span>#}
-{#        <span>Export Selected Layers</span>#}
-{#      </button>#}
-{#      #}
-{#      <div class="export-cost" id="exportCost">#}
-{#        Cost: <strong>0 connects</strong>#}
-{#      </div>#}
-{#    </div>#}
-{#  </div>#}
-{#</div>#}
-
-
+<!-- Modal Container (dynamically added) -->
 
 {% endblock %}
 
@@ -133,15 +120,36 @@
 <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 <script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
 
-<!-- Your custom GIS application script -->
+<!-- Your improved GIS application script -->
 <script src="{% static 'js/gis.js' %}"></script>
 
 <!-- Initialize the application -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    gisApp.init();
+    // Check authentication first
+    fetch('/all-layers/')
+        .then(response => {
+            if (response.ok) {
+                // User is authenticated, initialize app
+                gisApp.init();
+            } else {
+                // Redirect to login
+                window.location.href = '/accounts/login/?next=/';
+            }
+        })
+        .catch(error => {
+            console.error('Authentication check failed:', error);
+        });
 });
-
-
 </script>
+
+<!-- Add CSS for toastSlideOut animation -->
+<style>
+@keyframes toastSlideOut {
+    to {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+}
+</style>
 {% endblock %}

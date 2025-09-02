@@ -1,15 +1,26 @@
+# urls.py - Complete URL configuration
+
 from django.urls import path
 from . import views
 
 urlpatterns = [
-    # Main map page
-    path("", views.home, name="home"),
+    # Main page
+    path('', views.home, name='home'),
 
-    # API endpoints
-    path("all-layers/", views.all_layers, name="all_layers"),
-    path("layer-preview-features/", views.layer_preview_features, name="layer_preview_features"),
-    path("nearby-layers/", views.nearby_layers, name="nearby_layers"),
-    path("layer-feature-bounds/", views.layer_feature_bounds, name="layer_feature_bounds"),
-    path("export-dxf-multi/", views.export_dxf_multi, name="export_dxf_multi"),
-    path("check-connects/", views.check_connects, name="check_connects"),
+    # Layer management
+    path('layer-list/', views.layer_list, name='layer_list'),
+    path('layer-preview-features/', views.layer_preview_features, name='layer_preview_features'),
+    path('layer-preview-status/', views.layer_status_check, name='layer_status_check'),
+
+    # User interaction
+    path('nearby-layers/', views.nearby_layers, name='nearby_layers'),
+    # path('user-connects/', views.user_connects, name='user_connects'),
+
+    # Export/Download
+    path('export-dxf-multi/', views.export_dxf_multi, name='export_dxf_multi'),
+    path('download-layers/', views.download_layers, name='download_layers'),
+
+    # Utility
+    path('check-connects/', views.check_connects, name='check_connects'),
+
 ]

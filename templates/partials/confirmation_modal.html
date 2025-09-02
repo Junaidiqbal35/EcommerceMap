@@ -1,0 +1,230 @@
+<!-- Download Confirmation Modal -->
+<div class="modal-overlay" onclick="closeDownloadModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>🎯 Confirm Download</h3>
+            <button class="modal-close" onclick="closeDownloadModal()" aria-label="Close">×</button>
+        </div>
+        
+        <div class="modal-body">
+            <div class="download-confirmation">
+                <!-- Layer Information -->
+                <div class="layer-info-card">
+                    <div class="layer-info-header">
+                        <span class="layer-icon">
+                            {% if 'water' in layer.name|lower %}💧
+                            {% elif 'sewer' in layer.name|lower %}🚰
+                            {% elif 'electric' in layer.name|lower %}⚡
+                            {% elif 'road' in layer.name|lower %}🛣️
+                            {% elif 'gas' in layer.name|lower %}🔥
+                            {% elif 'telecom' in layer.name|lower %}📡
+                            {% else %}📍{% endif %}
+                        </span>
+                        <span class="layer-info-name">{{ layer.name }}</span>
+                    </div>
+                    
+                    <div class="layer-info-details">
+                        <div class="info-item">
+                            <span class="info-label">Server:</span>
+                            <span>{{ layer.server.name }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Type:</span>
+                            <span>{{ layer.type }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Features:</span>
+                            <span>{{ estimated_features|default:"Calculating..." }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Format:</span>
+                            <span>DXF/CAD</span>
+                        </div>
+                        {% if area_info %}
+                        <div class="info-item">
+                            <span class="info-label">Area:</span>
+                            <span>{{ area_info }}</span>
+                        </div>
+                        {% endif %}
+                        {% if coordinate_info %}
+                        <div class="info-item" style="grid-column: 1 / -1;">
+                            <span class="info-label">Location:</span>
+                            <span style="font-family: 'Courier New', monospace; font-size: 12px;">
+                                {{ coordinate_info }}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Connects Summary -->
+                <div class="connects-summary">
+                    <h4>💰 Connect Cost Summary</h4>
+                    <div class="connects-calculation">
+                        <span>Your Current Connects:</span>
+                        <span class="connects-value">{{ user_connects }}</span>
+                    </div>
+                    <div class="connects-calculation">
+                        <span>Download Cost:</span>
+                        <span class="cost-value">{{ download_cost|default:"1" }}</span>
+                    </div>
+                    <hr style="margin: 8px 0; border: none; border-top: 1px solid rgba(0,0,0,0.1);">
+                    <div class="connects-calculation">
+                        <span><strong>After Download:</strong></span>
+                        <span class="connects-result {% if user_connects >= download_cost|default:1 %}sufficient{% else %}insufficient{% endif %}">
+                            {% if user_connects >= download_cost|default:1 %}
+                                {{ user_connects|add:"-"|add:download_cost|default:1 }} connects
+                            {% else %}
+                                ⚠️ Insufficient connects
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    {% if user_connects < download_cost|default:1 %}
+                    <div style="margin-top: 12px; padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626; font-size: 14px;">
+                        You need {{ download_cost|default:1|add:"-"|add:user_connects }} more connects to complete this download.
+                        <a href="{% url 'buy_connects' %}" style="color: #dc2626; text-decoration: underline;">Buy more connects</a>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if download_type == 'multiple' %}
+                <!-- Multiple Layers Summary -->
+                <div class="multiple-layers-summary">
+                    <h5>Selected Layers ({{ selected_layers|length }})</h5>
+                    <div class="layers-list" style="max-height: 150px; overflow-y: auto;">
+                        {% for layer in selected_layers %}
+                        <div class="layer-summary-item">
+                            <span class="layer-icon">
+                                {% if 'water' in layer.name|lower %}💧
+                                {% elif 'sewer' in layer.name|lower %}🚰
+                                {% elif 'electric' in layer.name|lower %}⚡
+                                {% elif 'road' in layer.name|lower %}🛣️
+                                {% else %}📍{% endif %}
+                            </span>
+                            <span class="layer-name">{{ layer.name|truncatechars:25 }}</span>
+                            <span class="layer-server">{{ layer.server.name }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="modal-footer">
+            <button type="button" class="btn-cancel" onclick="closeDownloadModal()">
+                Cancel
+            </button>
+            
+            <button type="button" 
+                    class="btn-confirm"
+                    {% if user_connects < download_cost|default:1 %}disabled{% endif %}
+                    hx-post="{% url 'confirm_download' %}"
+                    hx-vals='{"layer_ids": "{{ layer_ids|join:"," }}", "download_type": "{{ download_type|default:"single" }}"}'
+                    hx-target="#downloadResultContent"
+                    hx-swap="innerHTML"
+                    hx-on::after-request="handleDownloadResponse(event)"
+                    hx-indicator="#downloadSpinner">
+                
+                <span id="downloadSpinner" class="htmx-indicator">
+                    <div class="loading-spinner" style="width: 16px; height: 16px; margin-right: 8px;"></div>
+                </span>
+                
+                {% if user_connects >= download_cost|default:1 %}
+                    Confirm Download
+                {% else %}
+                    Insufficient Connects
+                {% endif %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function closeDownloadModal() {
+    const modal = document.getElementById('downloadModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+}
+
+function handleDownloadResponse(event) {
+    if (event.detail.xhr.status === 200) {
+        // Success - close modal and show toast
+        closeDownloadModal();
+        showToast('Download started successfully!', 'success');
+        
+        // Update connects count
+        if (window.MapController) {
+            MapController.updateConnectsCount();
+        }
+    } else {
+        // Error handling
+        showToast('Download failed. Please try again.', 'error');
+    }
+}
+
+// Prevent modal close when clicking inside modal content
+document.addEventListener('DOMContentLoaded', function() {
+    const modalContent = document.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+});
+</script>
+
+<style>
+.multiple-layers-summary {
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.multiple-layers-summary h5 {
+    margin: 0 0 12px 0;
+    color: var(--text-primary);
+    font-size: 16px;
+}
+
+.layers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.layer-summary-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.layer-summary-item .layer-icon {
+    font-size: 14px;
+}
+
+.layer-summary-item .layer-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.layer-summary-item .layer-server {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+#downloadSpinner .loading-spinner {
+    border: 2px solid transparent;
+    border-top: 2px solid white;
+    display: inline-block;
+}
+</style>

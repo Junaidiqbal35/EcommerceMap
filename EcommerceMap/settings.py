@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     'import_export',
     'rest_framework',
     'connects',
+    'django_htmx',
+
 ]
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
@@ -55,7 +57,16 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'django_htmx.middleware.HtmxMiddleware',
 ]
+# CSRF Settings
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_NAME = 'csrftoken'
+CSRF_TRUSTED_ORIGINS = [
+    "https://80c9f29fad48.ngrok-free.app",
+]
+# Cache settings
 
 ROOT_URLCONF = 'EcommerceMap.urls'
 AUTH_USER_MODEL = 'accounts.User'
@@ -157,3 +168,11 @@ STRIPE_WEBHOOK_SECRET_KEY = os.getenv('STRIPE_WEBHOOK_SECRET_KEY')
 STRIPE_SUCCESS_URL = os.getenv('STRIPE_SUCCESS_URL')
 STRIPE_CANCEL_URL = os.getenv('STRIPE_CANCEL_URL')
 STRIPE_BILLING_PORTAL = os.getenv('STRIPE_BILLING_PORTAL')
+
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',
+    }
+}

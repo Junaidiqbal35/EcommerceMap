@@ -28,7 +28,8 @@
         currentBasemap: 'osm',
         clickedLocation: null,
         userConnects: 0,
-        selectedNearbyLayers: new Set()
+        selectedNearbyLayers: new Set(),
+        failedServices: new Set()
     };
 
     // Get CSRF token
@@ -43,20 +44,16 @@
         return null;
     }
 
-    // Toast Notification System
+    // Toast Notification System (simplified)
     const Toast = {
-        container: null,
-
-        init() {
-            if (!this.container) {
-                this.container = document.createElement('div');
-                this.container.className = 'toast-container';
-                document.body.appendChild(this.container);
-            }
-        },
-
         show(title, message, type = 'info', duration = 3000) {
-            this.init();
+            // Create toast container if it doesn't exist
+            let container = document.querySelector('.toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
 
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
@@ -77,7 +74,7 @@
                 <button class="toast-close">×</button>
             `;
 
-            this.container.appendChild(toast);
+            container.appendChild(toast);
 
             const closeBtn = toast.querySelector('.toast-close');
             closeBtn.onclick = () => this.remove(toast);
@@ -86,7 +83,7 @@
         },
 
         remove(toast) {
-            toast.style.animation = 'toastSlideOut 0.3s ease';
+            toast.style.animation = 'fadeOut 0.3s ease';
             setTimeout(() => toast.remove(), 300);
         }
     };
@@ -120,10 +117,8 @@
             overlay.appendChild(content);
             document.body.appendChild(overlay);
 
-            // Show animation
             setTimeout(() => overlay.classList.add('active'), 10);
 
-            // Button handlers
             const cancelBtn = content.querySelector('.btn-cancel');
             const confirmBtn = content.querySelector('.btn-confirm');
 
@@ -137,7 +132,6 @@
                 if (options.onConfirm) options.onConfirm();
             };
 
-            // Close on overlay click
             overlay.onclick = (e) => {
                 if (e.target === overlay) {
                     this.close(overlay);
@@ -194,12 +188,17 @@
 
     // Initialize application
     async function init() {
-        initMap();
-        await loadLayers();
-        await checkUserConnects();
-        bindEvents();
+        try {
+            initMap();
+            await loadLayers();
+            await checkUserConnects();
+            bindEvents();
 
-        Toast.show('Welcome!', 'Select layers to view or click on map to find nearby layers', 'info');
+            Toast.show('Welcome!', 'GIS Application loaded successfully', 'success');
+        } catch (error) {
+            console.error('Initialization error:', error);
+            Toast.show('Error', 'Failed to initialize application', 'error');
+        }
     }
 
     function initMap() {
@@ -212,24 +211,28 @@
         setupBasemaps();
         state.basemaps.osm.addTo(state.map);
 
-        // Add hash for URL
-        new L.Hash(state.map);
+        // Add hash for URL state
+        if (typeof L.Hash !== 'undefined') {
+            new L.Hash(state.map);
+        }
 
-        // Add geocoder
-        L.Control.geocoder({
-            defaultMarkGeocode: false,
-            placeholder: 'Search location...'
-        }).on('markgeocode', function (e) {
-            const bbox = e.geocode.bbox;
-            const poly = L.polygon([
-                bbox.getSouthEast(),
-                bbox.getNorthEast(),
-                bbox.getNorthWest(),
-                bbox.getSouthWest()
-            ]);
-            state.map.fitBounds(poly.getBounds());
-            Toast.show('Location Found', `Moved to ${e.geocode.name}`, 'success');
-        }).addTo(state.map);
+        // Add geocoder if available
+        if (typeof L.Control.geocoder !== 'undefined') {
+            L.Control.geocoder({
+                defaultMarkGeocode: false,
+                placeholder: 'Search location...'
+            }).on('markgeocode', function (e) {
+                const bbox = e.geocode.bbox;
+                const poly = L.polygon([
+                    bbox.getSouthEast(),
+                    bbox.getNorthEast(),
+                    bbox.getNorthWest(),
+                    bbox.getSouthWest()
+                ]);
+                state.map.fitBounds(poly.getBounds());
+                Toast.show('Location Found', `Moved to ${e.geocode.name}`, 'success');
+            }).addTo(state.map);
+        }
 
         // Map click for nearby layers
         state.map.on('click', handleMapClick);
@@ -248,7 +251,7 @@
             maxZoom: 19
         });
 
-        state.basemaps.terrain = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        state.basemaps.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: '© Esri',
             maxZoom: 19
         });
@@ -285,11 +288,8 @@
     }
 
     function updateConnectsDisplay() {
-        // Update connects display in UI
-        const connectsElements = document.querySelectorAll('.user-connects');
-        connectsElements.forEach(el => {
-            el.textContent = state.userConnects;
-        });
+        // This will be called by HTMX integration
+        // The actual display is handled by HTMX
     }
 
     function renderLayerList() {
@@ -298,7 +298,7 @@
         if (!state.layers.length) {
             container.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-state-icon">📍</div>
+                    <div class="empty-state-icon">📁</div>
                     <div class="empty-state-title">No Layers Available</div>
                     <div class="empty-state-message">Check back later for available layers</div>
                 </div>
@@ -323,10 +323,16 @@
         });
 
         Object.entries(grouped).forEach(([serverName, layers]) => {
+            const healthyLayers = layers.filter(layer => layer.is_healthy !== false);
+            const failedLayers = layers.filter(layer => layer.is_healthy === false);
+
             html += `
                 <div class="server-group">
-                    <div class="server-header">${serverName} (${layers.length})</div>
-                    ${layers.map(layer => `
+                    <div class="server-header">
+                        ${serverName} (${healthyLayers.length}/${layers.length})
+                        ${failedLayers.length > 0 ? '<span class="service-warning">⚠️</span>' : ''}
+                    </div>
+                    ${healthyLayers.map(layer => `
                         <div class="layer-item ${state.activeLayers[layer.id] ? 'active' : ''}" 
                              data-layer-id="${layer.id}"
                              data-layer-name="${layer.name.toLowerCase()}">
@@ -343,10 +349,20 @@
                                 </div>
                             </div>
                             ${layer.centroid_lat ? 
-                                `<button class="btn-zoom" onclick="event.stopPropagation(); gisApp.zoomToLayer(${layer.id})" title="Zoom to layer">📍</button>` 
+                                `<button class="btn-zoom" onclick="event.stopPropagation(); gisApp.zoomToLayer(${layer.id})" title="Zoom to layer">🔍</button>` 
                                 : ''}
                         </div>
                     `).join('')}
+                    ${failedLayers.length > 0 ? `
+                        <div class="failed-services">
+                            <details>
+                                <summary>⚠️ ${failedLayers.length} unavailable services</summary>
+                                ${failedLayers.map(layer => `
+                                    <div class="failed-layer">${layer.name} - Service unavailable</div>
+                                `).join('')}
+                            </details>
+                        </div>
+                    ` : ''}
                 </div>
             `;
         });
@@ -385,6 +401,12 @@
     }
 
     async function addLayerToMap(layer) {
+        // Check if service has failed before
+        if (state.failedServices.has(layer.id)) {
+            Toast.show('Service Unavailable', `${layer.name} service is currently unavailable`, 'warning');
+            return;
+        }
+
         const layerData = {
             layer: layer,
             features: new L.FeatureGroup(),
@@ -400,8 +422,8 @@
         // Load features
         await loadLayerFeatures(layer.id);
 
-        // Auto-zoom if features found
-        if (layerData.features.getLayers().length > 0) {
+        // Auto-zoom if features found and it's the only active layer
+        if (layerData.features.getLayers().length > 0 && Object.keys(state.activeLayers).length === 1) {
             try {
                 const bounds = layerData.features.getBounds();
                 state.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
@@ -425,6 +447,11 @@
         const layerData = state.activeLayers[layerId];
         if (!layerData || layerData.loading) return;
 
+        // Check if service has failed before
+        if (state.failedServices.has(layerId)) {
+            return;
+        }
+
         const bounds = state.map.getBounds();
 
         // Check if reload needed
@@ -445,9 +472,17 @@
             });
 
             const response = await fetch(`${CONFIG.URLS.LAYER_FEATURES}?${params}`);
-            if (!response.ok) throw new Error('Failed to load features');
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
 
             const geojson = await response.json();
+
+            // Check for service errors
+            if (geojson.error) {
+                throw new Error(geojson.error);
+            }
 
             // Clear and add new features
             layerData.features.clearLayers();
@@ -483,6 +518,20 @@
             }
         } catch (error) {
             console.error(`Error loading features for layer ${layerId}:`, error);
+
+            // Mark service as failed
+            state.failedServices.add(layerId);
+
+            // Show user-friendly error
+            const layer = state.layers.find(l => l.id === layerId);
+            if (layer) {
+                Toast.show('Service Error', `${layer.name}: ${error.message}`, 'warning');
+
+                // Dispatch event for potential HTMX integration
+                document.dispatchEvent(new CustomEvent('layerServiceFailed', {
+                    detail: { layerId, layerName: layer.name, error: error.message }
+                }));
+            }
         } finally {
             layerData.loading = false;
         }
@@ -506,7 +555,7 @@
                 <p><strong>Type:</strong> ${layer.type}</p>
                 <p><strong>Server:</strong> ${layer.server_name}</p>
                 ${lat && lng ? `<p><strong>Location:</strong> ${lat.toFixed(5)}, ${lng.toFixed(5)}</p>` : ''}
-                <button class="popup-btn" onclick="gisApp.downloadAreaWithConfirm(${layerId}, ${lat || 0}, ${lng || 0}, '${layer.name}')">
+                <button class="popup-btn" onclick="gisApp.downloadAreaWithConfirm(${layerId}, ${lat || 0}, ${lng || 0}, '${layer.name.replace(/'/g, "\\'")}')">
                     💾 Download This Area
                 </button>
             </div>
@@ -515,7 +564,7 @@
 
     function updateAllLayerFeatures() {
         Object.keys(state.activeLayers).forEach(layerId => {
-            loadLayerFeatures(layerId);
+            loadLayerFeatures(parseInt(layerId));
         });
     }
 
@@ -536,15 +585,7 @@
         const list = document.getElementById('nearbyList');
 
         sidebar.classList.add('active');
-        list.innerHTML = '<div class="spinner"></div>';
-
-        // Show location info
-        const infoBox = document.createElement('div');
-        infoBox.className = 'nearby-info-box';
-        infoBox.innerHTML = `
-            <strong>📍 Clicked Location</strong>
-            <small>Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}</small>
-        `;
+        list.innerHTML = '<div class="loading-spinner"></div>';
 
         try {
             const params = new URLSearchParams({
@@ -566,6 +607,14 @@
                 `;
                 return;
             }
+
+            // Show location info
+            const infoBox = document.createElement('div');
+            infoBox.className = 'nearby-info-box';
+            infoBox.innerHTML = `
+                <strong>📍 Clicked Location</strong>
+                <small>Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}</small>
+            `;
 
             // Clear selection
             state.selectedNearbyLayers.clear();
@@ -599,7 +648,12 @@
             list.appendChild(infoBox);
             list.innerHTML += html;
 
-            updateNearbyDownloadSummary();
+            // Show the form
+            const form = document.getElementById('nearbyForm');
+            if (form) {
+                form.style.display = 'block';
+                updateNearbyDownloadSummary();
+            }
 
         } catch (error) {
             console.error('Error loading nearby layers:', error);
@@ -650,7 +704,7 @@
             </div>
         `;
 
-        const downloadBtn = document.querySelector('#nearbyForm button[type="submit"]');
+        const downloadBtn = document.querySelector('#downloadSelectedBtn');
         if (downloadBtn) {
             downloadBtn.disabled = !hasEnough || count === 0;
             if (!hasEnough) {
@@ -663,9 +717,7 @@
         }
     }
 
-    async function downloadNearbyLayers(e) {
-        e.preventDefault();
-
+    async function downloadNearbyLayers() {
         const selectedCount = state.selectedNearbyLayers.size;
         if (selectedCount === 0) {
             Toast.show('No Selection', 'Please select at least one layer', 'warning');
@@ -734,14 +786,17 @@
                 formData.append('maxy', lat + CONFIG.MAX_DOWNLOAD_AREA);
             }
 
+            // Add CSRF token
+            const csrfToken = getCSRFToken();
+            if (csrfToken) {
+                formData.append('csrfmiddlewaretoken', csrfToken);
+            }
+
             Progress.update(40, 'Fetching features...');
 
             const response = await fetch(CONFIG.URLS.EXPORT_DXF, {
                 method: 'POST',
                 body: formData,
-                headers: {
-                    'X-CSRFToken': getCSRFToken()
-                },
                 credentials: 'same-origin'
             });
 
@@ -766,7 +821,14 @@
 
             // Update connects
             state.userConnects -= state.selectedNearbyLayers.size;
-            updateConnectsDisplay();
+
+            // Trigger HTMX update
+            if (window.triggerConnectsUpdate) {
+                window.triggerConnectsUpdate();
+            }
+
+            // Dispatch event for downloads
+            document.dispatchEvent(new CustomEvent('downloadCompleted'));
 
             closeSidebar();
             Toast.show('Success!', 'Download completed successfully', 'success', 5000);
@@ -829,14 +891,17 @@
             formData.append('maxx', lng + CONFIG.MAX_DOWNLOAD_AREA);
             formData.append('maxy', lat + CONFIG.MAX_DOWNLOAD_AREA);
 
+            // Add CSRF token
+            const csrfToken = getCSRFToken();
+            if (csrfToken) {
+                formData.append('csrfmiddlewaretoken', csrfToken);
+            }
+
             Progress.update(60, 'Processing...');
 
             const response = await fetch(CONFIG.URLS.EXPORT_DXF, {
                 method: 'POST',
                 body: formData,
-                headers: {
-                    'X-CSRFToken': getCSRFToken()
-                },
                 credentials: 'same-origin'
             });
 
@@ -847,13 +912,17 @@
             Progress.update(90, 'Preparing file...');
 
             const blob = await response.blob();
-            downloadFile(blob, `${layerName}_${Date.now()}.dxf`);
+            downloadFile(blob, `${layerName.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.dxf`);
 
             Progress.update(100, 'Complete!');
 
             // Update connects
             state.userConnects--;
-            updateConnectsDisplay();
+
+            // Trigger HTMX update
+            if (window.triggerConnectsUpdate) {
+                window.triggerConnectsUpdate();
+            }
 
             Toast.show('Success!', `${layerName} downloaded successfully`, 'success');
 
@@ -876,21 +945,38 @@
     }
 
     function closeSidebar() {
-        document.getElementById('sidebar').classList.remove('active');
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) {
+            sidebar.classList.remove('active');
+
+            // Hide the form
+            const form = document.getElementById('nearbyForm');
+            if (form) {
+                form.style.display = 'none';
+            }
+        }
     }
 
     function toggleMinimize() {
         const panel = document.getElementById('layerPanel');
+        const content = document.getElementById('panelContent');
         const icon = document.getElementById('minimizeIcon');
 
-        panel.classList.toggle('minimized');
-        icon.textContent = panel.classList.contains('minimized') ? '+' : '−';
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            icon.textContent = '−';
+        } else {
+            content.style.display = 'none';
+            icon.textContent = '+';
+        }
     }
 
     function updateStats() {
         const activeCount = Object.keys(state.activeLayers).length;
-        document.getElementById('layerCount').textContent =
-            activeCount > 0 ? `(${activeCount} active)` : '';
+        const countEl = document.getElementById('layerCount');
+        if (countEl) {
+            countEl.textContent = activeCount > 0 ? `(${activeCount} active)` : '';
+        }
     }
 
     function zoomToLayer(layerId) {
@@ -906,7 +992,11 @@
     }
 
     function refreshLayers() {
-        document.getElementById('layerList').innerHTML = '<div class="spinner"></div>';
+        document.getElementById('layerList').innerHTML = '<div class="loading-spinner"></div>';
+
+        // Clear failed services cache
+        state.failedServices.clear();
+
         loadLayers().then(() => {
             Toast.show('Refreshed', 'Layer list updated', 'success');
         });
@@ -960,22 +1050,25 @@
         // Nearby form submission
         const nearbyForm = document.getElementById('nearbyForm');
         if (nearbyForm) {
-            nearbyForm.addEventListener('submit', downloadNearbyLayers);
+            nearbyForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                downloadNearbyLayers();
+            });
         }
 
         // Basemap control hover
         const basemapControl = document.querySelector('.basemap-control');
         if (basemapControl) {
             basemapControl.addEventListener('mouseenter', () => {
-                document.querySelector('.basemap-options').classList.add('active');
+                document.querySelector('.basemap-options').style.display = 'block';
             });
             basemapControl.addEventListener('mouseleave', () => {
-                document.querySelector('.basemap-options').classList.remove('active');
+                document.querySelector('.basemap-options').style.display = 'none';
             });
         }
     }
 
-    // Public API
+    // Public API - methods that can be called from HTMX integration
     window.gisApp = {
         init,
         toggleLayer,
@@ -984,7 +1077,19 @@
         closeSidebar,
         toggleMinimize,
         downloadAreaWithConfirm,
-        toggleNearbyLayer
+        toggleNearbyLayer,
+        downloadNearbyLayers,
+
+        // Additional methods for HTMX integration
+        updateConnectsCount: function(connects) {
+            state.userConnects = connects;
+        },
+
+        getState: function() {
+            return state;
+        },
+
+        performDownload: performDownload
     };
 
 })();

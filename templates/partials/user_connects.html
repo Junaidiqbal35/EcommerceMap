@@ -1,0 +1,55 @@
+<span class="connects-icon">💰</span>
+<span class="connects-count">{{ connects }}</span>
+<span class="connects-label">Connects</span>
+
+<!-- templates/partials/download_result.html -->
+<div class="download-result-container">
+    {% if success %}
+    <div class="download-success">
+        <div class="success-icon">✓</div>
+        <h3>Download Complete!</h3>
+        <p>Successfully downloaded {{ layer_count }} layer{{ layer_count|pluralize }}</p>
+        <p class="remaining-info">
+            <strong>Remaining connects:</strong> 
+            <span class="connects-badge-inline">{{ remaining_connects }}</span>
+        </p>
+        <div class="download-info">
+            <p><small>Your file should start downloading automatically.</small></p>
+            <p><small>If not, please check your browser's download settings.</small></p>
+        </div>
+        <button onclick="document.querySelector('#downloadResultModal').__x.$data.show = false; document.querySelector('#nearbySidebar').__x.$data.open = false;" 
+                class="btn-primary">
+            Continue Exploring
+        </button>
+    </div>
+    {% else %}
+    <div class="download-error">
+        <div class="error-icon">✕</div>
+        <h3>Download Failed</h3>
+        <p class="error-message">{{ error_message|default:"An error occurred during download" }}</p>
+
+        {% if error_code == "insufficient_connects" %}
+        <div class="error-details">
+            <p>You need <strong>{{ required_connects }}</strong> connects but only have <strong>{{ user_connects }}</strong>.</p>
+            <a href="{% url 'buy_connects' %}" class="btn-primary">
+                💰 Buy More Connects
+            </a>
+        </div>
+        {% elif error_code == "no_features" %}
+        <div class="error-details">
+            <p>No features found in the selected area.</p>
+            <p>Try selecting a different location or zooming in.</p>
+        </div>
+        {% else %}
+        <div class="error-details">
+            <p>Please try again or contact support if the problem persists.</p>
+        </div>
+        {% endif %}
+
+        <button onclick="document.querySelector('#downloadResultModal').__x.$data.show = false;" 
+                class="btn-secondary">
+            Close
+        </button>
+    </div>
+    {% endif %}
+</div>

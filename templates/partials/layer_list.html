@@ -1,0 +1,151 @@
+{% load static %}
+
+{% if not layers %}
+<div class="empty-state">
+    <div class="empty-icon">📦</div>
+    <h3>No Layers Found</h3>
+    <p>{{ message|default:"No layers available at this time" }}</p>
+</div>
+{% else %}
+<div class="layers-container">
+    {% for server, server_layers in grouped_layers.items %}
+    <div class="server-group" x-data="{ expanded: true }">
+        <div class="server-header" @click="expanded = !expanded">
+            <span class="expand-icon" x-text="expanded ? '▼' : '▶'"></span>
+            <span class="server-name">{{ server }}</span>
+            <span class="server-count">({{ server_layers|length }})</span>
+        </div>
+        
+        <div class="server-layers" x-show="expanded" x-transition>
+            {% for layer in server_layers %}
+            <div class="layer-item" data-layer-id="{{ layer.layer_id }}">
+                <input type="checkbox" 
+                       id="layer-{{ layer.layer_id }}"
+                       class="layer-checkbox"
+                       onchange="toggleLayer({{ layer.layer_id }}, this)">
+                
+                <label for="layer-{{ layer.layer_id }}" class="layer-label">
+                    <div class="layer-main">
+                        <span class="layer-icon">
+                            {% if 'water' in layer.name|lower %}💧
+                            {% elif 'sewer' in layer.name|lower %}🚰
+                            {% elif 'electric' in layer.name|lower %}⚡
+                            {% elif 'road' in layer.name|lower %}🛣️
+                            {% elif 'gas' in layer.name|lower %}🔥
+                            {% elif 'telecom' in layer.name|lower %}📡
+                            {% else %}📍{% endif %}
+                        </span>
+                        <span class="layer-name" title="{{ layer.name }}">{{ layer.name|truncatechars:30 }}</span>
+                    </div>
+                    <div class="layer-meta">
+                        <span class="layer-type">{{ layer.type }}</span>
+                        <span class="feature-count" id="layer-status-{{ layer.layer_id }}"></span>
+                        {% if not layer.geometry and not layer.offsetX and not layer.offsetY %}
+                        <span class="no-geometry" title="No location data available">📍❌</span>
+                        {% endif %}
+                    </div>
+                </label>
+                
+                <div class="layer-actions">
+                    <!-- Enhanced zoom button logic -->
+                    {% if layer.geometry %}
+                        {% if layer.geometry.geom_type == 'Point' %}
+                            <button class="btn-zoom" 
+                                    onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.y }}, {{ layer.geometry.x }})"
+                                    title="Zoom to layer location">
+                                🎯
+                            </button>
+                        {% else %}
+                            <button class="btn-zoom" 
+                                    onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.centroid.y }}, {{ layer.geometry.centroid.x }})"
+                                    title="Zoom to layer center">
+                                🎯
+                            </button>
+                        {% endif %}
+                    {% elif layer.offsetX != 0 or layer.offsetY != 0 %}
+                        <!-- Handle offset coordinates -->
+                        <button class="btn-zoom" 
+                                onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.offsetY }}, {{ layer.offsetX }})"
+                                title="Zoom to layer offset location">
+                                🎯
+                        </button>
+                    {% elif layer.server.extent_min_x and layer.server.extent_max_x %}
+                        <!-- Fallback to server extent center -->
+                        <button class="btn-zoom" 
+                                onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.server.extent_min_y|add:layer.server.extent_max_y|floatformat:6 }}, {{ layer.server.extent_min_x|add:layer.server.extent_max_x|floatformat:6 }})"
+                                title="Zoom to server area">
+                                🌍
+                        </button>
+                    {% else %}
+                        <!-- No location data available -->
+                        <button class="btn-zoom disabled" 
+                                title="No location data available"
+                                disabled>
+                                ❓
+                        </button>
+                    {% endif %}
+                    
+                    <!-- Preview button with HTMX -->
+                    <button class="btn-preview" 
+                            hx-get="{% url 'layer_preview_features' %}"
+                            hx-include="[name='bbox']"
+                            hx-vals='{"layer_id": "{{ layer.layer_id }}"}'
+                            hx-trigger="click"
+                            hx-target="#preview-content"
+                            hx-swap="innerHTML"
+                            hx-indicator=".htmx-indicator"
+                            title="Toggle layer preview"
+                            data-layer-id="{{ layer.layer_id }}">
+                        👁️
+                    </button>
+                    
+                    <!-- Download single layer button -->
+                    <button class="btn-download-single" 
+                            onclick="downloadArea({{ layer.layer_id }}, {{ layer.offsetY|default:'null' }}, {{ layer.offsetX|default:'null' }})"
+                            title="Download this layer">
+                        💾
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Layer status info at bottom -->
+<div class="layer-stats">
+    <small>
+        Total layers: {{ layers|length }} | 
+        <span id="layersWithGeometry">Calculating...</span> with location data |
+        <span id="selectedLayers">0</span> selected
+    </small>
+</div>
+
+<script>
+// Calculate layer statistics
+document.addEventListener('DOMContentLoaded', function() {
+    const layerItems = document.querySelectorAll('.layer-item');
+    let withGeometry = 0;
+    
+    layerItems.forEach(item => {
+        const hasGeometry = !item.querySelector('.no-geometry');
+        if (hasGeometry) withGeometry++;
+    });
+    
+    document.getElementById('layersWithGeometry').textContent = withGeometry;
+});
+
+// Update selected count
+function updateSelectedCount() {
+    const selected = document.querySelectorAll('.layer-checkbox:checked').length;
+    document.getElementById('selectedLayers').textContent = selected;
+}
+
+// Add event listeners to checkboxes
+document.querySelectorAll('.layer-checkbox').forEach(cb => {
+    cb.addEventListener('change', updateSelectedCount);
+});
+</script>
+
+{% endif %}

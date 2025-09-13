@@ -44,6 +44,8 @@ Install project with venv
  ```
 
   python3 manage.py runserver
+  python manage.py fixing_layers_austrialian --validate-coordinates
+
 
 
 ## Useful Commands

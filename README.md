@@ -1,7 +1,30 @@
 
-# Ecommerce Map Project
+# Map GIS Project
 
-A Project for Ecommerce MAP
+Project Summary: GIS Layer Download & Export System
+What It Is
+A python-django based web application that allows users to browse, preview, and download GIS infrastructure layers from multiple ArcGIS REST servers, with data export capabilities to DXF/CAD format.
+
+Core Functionality:
+
+Layer Browser: Users can search and filter infrastructure layers (water, electric, roads, etc.) from configured ArcGIS servers
+Map Preview: Interactive map showing layer data before download with zoom-to-layer functionality
+Credits System: Users spend "connects" (credits) to download layers
+Export System: Downloads layer data as DXF files for CAD software, with Australian coordinate system conversion (GDA2020/GDA94)
+Nearby Search: Click-to-find layers near specific map locations
+
+Key Components
+
+Server Management: Configures multiple ArcGIS REST service endpoints
+Layer Catalog: 68+ layers across 25+ servers with metadata and geometry info
+Download Tracking: Records user downloads with location/timestamp
+Coordinate Conversion: Automatic projection to appropriate Australian MGA zones
+DXF Generation: Creates CAD-compatible files with proper symbology and labeling
+
+Target Users
+Infrastructure professionals, surveyors, and GIS analysts who need to access and download utility/infrastructure data for CAD workflows in Australia.
+Technical Stack
+Django + PostGIS, Leaflet maps, ArcGIS REST API integration, HTMX for dynamic UI, DXF export via ezdxf library.
 
 
 ## Installation

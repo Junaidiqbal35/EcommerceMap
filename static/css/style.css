@@ -3,7 +3,7 @@ body{
     font-family: 'Comfortaa', sans-serif;
 }
 .navbar {
-  background: linear-gradient(135deg, rgb(102, 126, 234) 0%, rgb(118, 75, 162) 100%);
+  background: linear-gradient(135deg, rgb(102, 126, 234) 0%, rgb(118, 75, 162) 100%) !important;
 }
 
 .navbar .nav-link {

@@ -15,9 +15,10 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.1/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.1/dist/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+ <link rel="stylesheet" href="{% static 'css/style.css' %}">
     
     {% block title %}
-        <title>EcommerceMap</title>
+        <title>Gis Map</title>
     {% endblock title %}
     
 
@@ -39,10 +40,10 @@
           <div class="collapse navbar-collapse" id="navbarText">
             <ul class="navbar-nav ms-auto mb-2 mb-lg-0" >
              <li class="nav-item">
-                        <a class="nav-link " href="{% url 'buy_connects' %}" style="color: white;">Buy Connects</a>
+                        <a class="nav-link " href="{% url 'buy_connects' %}">Buy Connects</a>
              </li>
              <li class="nav-item">
-                        <a class="nav-link " href="{% url 'connects_page' %}" style="color: white;">My Connects</a>
+                        <a class="nav-link " href="{% url 'connects_page' %}">My Connects</a>
              </li>
       
              

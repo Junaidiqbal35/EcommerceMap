@@ -30,12 +30,12 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Constants
-MAX_DOWNLOAD_AREA = 0.001  # ~100m box
-MAX_FEATURES_PREVIEW = 500
+MAX_DOWNLOAD_AREA = 0.005
 CACHE_TIMEOUT = 300
-
-# DXF Drawing Constants
+# Reasonable limit for CAD performance
+MAX_FEATURES_PER_LAYER = 5000
 TEXT_HEIGHT = 0.4
+TEXT_OFFSET = 1.2
 TEXT_OFFSET_X = 1.2
 TEXT_OFFSET_Y = 1.2
 DECIMAL = 3
@@ -521,344 +521,831 @@ def layer_preview_status(request):
             'message': 'Layer not found'
         })
 
+# @login_required
+# @require_POST
+# def export_dxf_multi(request):
+#     """
+#     Export selected layers as DXF file with advanced drawing features.
+#     Fixed version with better debugging and error handling.
+#     """
+#     user = request.user
+#     layer_ids = request.POST.getlist('layer_ids[]')
+#     minx = request.POST.get('minx')
+#     miny = request.POST.get('miny')
+#     maxx = request.POST.get('maxx')
+#     maxy = request.POST.get('maxy')
+#     lat = request.POST.get('lat')
+#     lng = request.POST.get('lng')
+#
+#     # Enhanced debug logging
+#     logger.info(f"Export request from {user.username}: {len(layer_ids)} layers")
+#     logger.debug(f"Bounds: ({minx}, {miny}) to ({maxx}, {maxy})")
+#     logger.debug(f"Center: ({lat}, {lng})")
+#
+#     # Track processing status with more detail
+#     processing_report = {
+#         'attempted_layers': [],
+#         'successful_layers': [],
+#         'failed_layers': [],
+#         'partial_layers': [],
+#         'total_features': 0,
+#         'errors': [],
+#         'debug_info': []
+#     }
+#
+#     if not layer_ids:
+#         return JsonResponse({
+#             'success': False,
+#             'error': 'No layers selected'
+#         }, status=200)  # Changed from 400 to 200
+#
+#     try:
+#         # Validate and parse coordinates
+#         try:
+#             minx, miny = float(minx), float(miny)
+#             maxx, maxy = float(maxx), float(maxy)
+#         except (ValueError, TypeError) as e:
+#             logger.error(f"Invalid coordinates: {e}")
+#             return JsonResponse({
+#                 'success': False,
+#                 'error': f'Invalid coordinates: {str(e)}'
+#             }, status=200)  # Changed from 400 to 200
+#
+#         # Parse optional center point
+#         try:
+#             if lat and lng:
+#                 lat, lng = float(lat), float(lng)
+#             else:
+#                 lat = (miny + maxy) / 2
+#                 lng = (minx + maxx) / 2
+#         except (ValueError, TypeError) as e:
+#             logger.warning(f"Error parsing center point, using calculated center: {e}")
+#             lat = (miny + maxy) / 2
+#             lng = (minx + maxx) / 2
+#
+#         # Enforce area limits
+#         width = maxx - minx
+#         height = maxy - miny
+#         original_bounds = (minx, miny, maxx, maxy)
+#
+#         if width > MAX_DOWNLOAD_AREA * 2 or height > MAX_DOWNLOAD_AREA * 2:
+#             minx = lng - MAX_DOWNLOAD_AREA
+#             maxx = lng + MAX_DOWNLOAD_AREA
+#             miny = lat - MAX_DOWNLOAD_AREA
+#             maxy = lat + MAX_DOWNLOAD_AREA
+#             logger.info(f"Area limited from {original_bounds} to ({minx}, {miny}, {maxx}, {maxy})")
+#             processing_report['debug_info'].append(f"Area was limited to {MAX_DOWNLOAD_AREA} degrees")
+#
+#         # Get layers
+#         try:
+#             layers = Layer.objects.filter(layer_id__in=layer_ids).select_related('server')
+#             if not layers.exists():
+#                 return JsonResponse({
+#                     'success': False,
+#                     'error': 'No valid layers found in database'
+#                 }, status=200)  # Changed from 404 to 200
+#
+#             logger.info(f"Found {layers.count()} layers in database")
+#         except Exception as e:
+#             logger.error(f"Database error fetching layers: {e}")
+#             return JsonResponse({
+#                 'success': False,
+#                 'error': f'Database error: {str(e)}'
+#             }, status=200)  # Changed from 500 to 200
+#
+#         # Check user connects (optional)
+#         if hasattr(user, 'connects'):
+#             if user.connects < len(layers):
+#                 return JsonResponse({
+#                     'success': False,
+#                     'error': f'Not enough connects. Need {len(layers)}, you have {user.connects}'
+#                 }, status=200)  # Changed from 403 to 200
+#
+#         # Create DXF document
+#         try:
+#             doc = ezdxf.new('R2010')
+#             msp = doc.modelspace()
+#             logger.debug("DXF document created successfully")
+#         except Exception as e:
+#             logger.error(f"Failed to create DXF document: {e}")
+#             return JsonResponse({
+#                 'success': False,
+#                 'error': 'Failed to create DXF document'
+#             }, status=200)
+#
+#         # Insert block definitions
+#         try:
+#             insert_blocks(doc)
+#             logger.debug("Block definitions inserted")
+#         except Exception as e:
+#             logger.warning(f"Error inserting block definitions: {e}")
+#             processing_report['errors'].append(f"Block definitions warning: {str(e)}")
+#
+#         # Determine spatial reference
+#         try:
+#             converter = GDA2020Converter()
+#             out_sr_wkid = converter.get_wkid(lat, lng, datum='gda94')
+#
+#             if out_sr_wkid is None:
+#                 out_sr_wkid = 28356  # Default to GDA94 MGA Zone 56
+#                 logger.warning(f"Location {lat}, {lng} outside Australia, using default WKID 28356")
+#                 processing_report['debug_info'].append(f"Using default WKID 28356")
+#             else:
+#                 logger.info(f"Using WKID {out_sr_wkid} for location {lat}, {lng}")
+#                 processing_report['debug_info'].append(f"Using WKID {out_sr_wkid}")
+#         except Exception as e:
+#             logger.warning(f"Error determining spatial reference: {e}, using default")
+#             out_sr_wkid = 28356
+#             processing_report['debug_info'].append(f"WKID error, using default 28356")
+#
+#         # Process each layer
+#         for layer in layers:
+#             layer_name = layer.name
+#             processing_report['attempted_layers'].append(layer_name)
+#             layer_feature_count = 0
+#             layer_errors = []
+#
+#             logger.info(f"Processing layer: {layer_name} (ID: {layer.layer_id}, Number: {layer.number})")
+#
+#             try:
+#                 # Create layer in DXF
+#                 try:
+#                     if layer_name not in doc.layers:
+#                         doc.layers.new(name=layer_name)
+#                         logger.debug(f"Created DXF layer: {layer_name}")
+#                 except Exception as e:
+#                     logger.warning(f"Could not create DXF layer '{layer_name}': {e}")
+#                     layer_errors.append(f"Layer creation warning: {str(e)}")
+#
+#                 # Create Text layer for labels
+#                 try:
+#                     if 'Text' not in doc.layers:
+#                         doc.layers.new(name='Text')
+#                 except:
+#                     pass
+#
+#                 # Check if server exists
+#                 if not layer.server:
+#                     logger.error(f"No server configured for layer {layer_name}")
+#                     layer_errors.append("No server configured")
+#                     processing_report['failed_layers'].append({
+#                         'name': layer_name,
+#                         'errors': layer_errors
+#                     })
+#                     continue
+#
+#                 # Log the request we're about to make
+#                 logger.debug(f"Fetching from: {layer.server.url}/{layer.number}")
+#                 logger.debug(f"Bounds: {minx},{miny},{maxx},{maxy}")
+#
+#                 # Fetch features with detailed error tracking
+#                 features_data = []
+#                 try:
+#                     features_data = fetch_layer_features_with_attributes(
+#                         layer, minx, miny, maxx, maxy, out_sr=out_sr_wkid
+#                     )
+#
+#                     if not features_data:
+#                         logger.warning(f"No features returned for layer {layer_name}")
+#                         layer_errors.append("No features in area")
+#                     else:
+#                         logger.info(f"Fetched {len(features_data)} features for layer {layer_name}")
+#
+#                 except requests.exceptions.Timeout:
+#                     logger.error(f"Timeout fetching layer {layer_name}")
+#                     layer_errors.append("Request timeout")
+#                 except requests.exceptions.RequestException as e:
+#                     logger.error(f"Network error for layer {layer_name}: {e}")
+#                     layer_errors.append(f"Network error: {str(e)[:100]}")
+#                 except Exception as e:
+#                     logger.error(f"Error fetching layer {layer_name}: {e}", exc_info=True)
+#                     layer_errors.append(f"Fetch error: {str(e)[:100]}")
+#
+#                 # Process each feature
+#                 if features_data:
+#                     for feature_index, feature_info in enumerate(features_data):
+#                         try:
+#                             geom = feature_info.get('geometry')
+#                             if geom and geom.valid:
+#                                 try:
+#                                     # Use the safer drawing function
+#                                     success = draw_feature_to_dxf_safe(
+#                                         msp,
+#                                         geom,
+#                                         feature_info.get('attributes', {}),
+#                                         layer
+#                                     )
+#                                     if success:
+#                                         layer_feature_count += 1
+#                                         processing_report['total_features'] += 1
+#                                     else:
+#                                         logger.debug(f"Failed to draw feature {feature_index} in {layer_name}")
+#                                 except Exception as e:
+#                                     logger.debug(f"Error drawing feature {feature_index} in {layer_name}: {e}")
+#                                     if feature_index < 5:  # Only log first few errors
+#                                         layer_errors.append(f"Feature {feature_index} draw error")
+#                             else:
+#                                 logger.debug(f"Invalid geometry for feature {feature_index} in {layer_name}")
+#                         except Exception as e:
+#                             logger.debug(f"Error processing feature {feature_index} in {layer_name}: {e}")
+#                             continue
+#
+#                 # Categorize layer result
+#                 if layer_feature_count > 0:
+#                     if layer_errors:
+#                         processing_report['partial_layers'].append({
+#                             'name': layer_name,
+#                             'features': layer_feature_count,
+#                             'errors': layer_errors[:5]  # Limit error count
+#                         })
+#                     else:
+#                         processing_report['successful_layers'].append({
+#                             'name': layer_name,
+#                             'features': layer_feature_count
+#                         })
+#
+#                     # Log download record
+#                     try:
+#                         DownloadRecord.objects.create(
+#                             user=user,
+#                             layer=layer,
+#                             latitude=lat,
+#                             longitude=lng
+#                         )
+#                     except Exception as e:
+#                         logger.warning(f"Could not create download record: {e}")
+#                 else:
+#                     processing_report['failed_layers'].append({
+#                         'name': layer_name,
+#                         'errors': layer_errors if layer_errors else ['No features found in area']
+#                     })
+#
+#             except Exception as e:
+#                 logger.error(f"Unexpected error processing layer {layer_name}: {e}", exc_info=True)
+#                 processing_report['failed_layers'].append({
+#                     'name': layer_name,
+#                     'errors': [f"Unexpected error: {str(e)[:100]}"]
+#                 })
+#
+#         # Log final summary
+#         logger.info(
+#             f"Export summary - Total features: {processing_report['total_features']}, "
+#             f"Successful: {len(processing_report['successful_layers'])}, "
+#             f"Partial: {len(processing_report['partial_layers'])}, "
+#             f"Failed: {len(processing_report['failed_layers'])}"
+#         )
+#
+#         # Check if we have any successful exports
+#         if processing_report['total_features'] == 0:
+#             # Return user-friendly error message
+#             failed_names = [l['name'] for l in processing_report['failed_layers']]
+#
+#             return JsonResponse({
+#                 'success': False,
+#                 'error': 'No features could be exported from the selected area',
+#                 'details': {
+#                     'message': 'The selected layers may not have data in this area. Try zooming to a different location or selecting different layers.',
+#                     'attempted_layers': len(processing_report['attempted_layers']),
+#                     'failed_layers': failed_names[:10],  # Limit list size
+#                     'suggestions': [
+#                         'Zoom to a different area',
+#                         'Select different layers',
+#                         'Check if layers are properly configured',
+#                         'Verify the area contains infrastructure'
+#                     ]
+#                 },
+#                 'debug': processing_report['debug_info'] if settings.DEBUG else None
+#             }, status=200)  # Important: Changed from 404 to 200
+#
+#         # Deduct connects only for successful/partial layers
+#         successful_count = len(processing_report['successful_layers']) + len(processing_report['partial_layers'])
+#         if hasattr(user, 'connects') and successful_count > 0:
+#             try:
+#                 user.connects -= successful_count
+#                 user.save()
+#                 logger.info(f"Deducted {successful_count} connects from user {user.username}")
+#             except Exception as e:
+#                 logger.error(f"Error updating user connects: {e}")
+#
+#         # Generate DXF file
+#         try:
+#             response = HttpResponse(content_type='application/dxf')
+#             filename = f"export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.dxf"
+#             response['Content-Disposition'] = f'attachment; filename="{filename}"'
+#
+#             # Write DXF
+#             doc.write(response)
+#
+#             logger.info(
+#                 f"Successfully exported DXF for {user.username}: "
+#                 f"{processing_report['total_features']} features from {successful_count} layers"
+#             )
+#
+#             return response
+#
+#         except Exception as e:
+#             logger.error(f"Error generating DXF response: {e}", exc_info=True)
+#             return JsonResponse({
+#                 'success': False,
+#                 'error': 'Failed to generate DXF file'
+#             }, status=200)
+#
+#     except Exception as e:
+#         logger.error(f"Critical export error: {e}", exc_info=True)
+#         return JsonResponse({
+#             'success': False,
+#             'error': 'Export failed unexpectedly',
+#             'details': str(e) if settings.DEBUG else 'Please contact support'
+#         }, status=200)
+
 @login_required
 @require_POST
 def export_dxf_multi(request):
     """
-    Export selected layers as DXF file with advanced drawing features.
-    Fixed version with better debugging and error handling.
+    Optimized DXF export for Australian infrastructure analysis.
+    Clean, efficient, and focused on delivering perfect CAD files.
     """
-    user = request.user
+
+    # Parse request parameters
     layer_ids = request.POST.getlist('layer_ids[]')
-    minx = request.POST.get('minx')
-    miny = request.POST.get('miny')
-    maxx = request.POST.get('maxx')
-    maxy = request.POST.get('maxy')
-    lat = request.POST.get('lat')
-    lng = request.POST.get('lng')
-
-    # Enhanced debug logging
-    logger.info(f"Export request from {user.username}: {len(layer_ids)} layers")
-    logger.debug(f"Bounds: ({minx}, {miny}) to ({maxx}, {maxy})")
-    logger.debug(f"Center: ({lat}, {lng})")
-
-    # Track processing status with more detail
-    processing_report = {
-        'attempted_layers': [],
-        'successful_layers': [],
-        'failed_layers': [],
-        'partial_layers': [],
-        'total_features': 0,
-        'errors': [],
-        'debug_info': []
+    bounds = {
+        'minx': float(request.POST.get('minx', 0)),
+        'miny': float(request.POST.get('miny', 0)),
+        'maxx': float(request.POST.get('maxx', 0)),
+        'maxy': float(request.POST.get('maxy', 0))
     }
 
+    # Calculate center point
+    center_lng = (bounds['minx'] + bounds['maxx']) / 2
+    center_lat = (bounds['miny'] + bounds['maxy']) / 2
+
+    # Input validation
     if not layer_ids:
-        return JsonResponse({
-            'success': False,
-            'error': 'No layers selected'
-        }, status=200)  # Changed from 400 to 200
+        return JsonResponse({'success': False, 'error': 'No layers selected'})
+
+    # Enforce reasonable download area
+    width = bounds['maxx'] - bounds['minx']
+    height = bounds['maxy'] - bounds['miny']
+
+    if width > MAX_DOWNLOAD_AREA * 2 or height > MAX_DOWNLOAD_AREA * 2:
+        bounds = {
+            'minx': center_lng - MAX_DOWNLOAD_AREA,
+            'maxx': center_lng + MAX_DOWNLOAD_AREA,
+            'miny': center_lat - MAX_DOWNLOAD_AREA,
+            'maxy': center_lat + MAX_DOWNLOAD_AREA
+        }
 
     try:
-        # Validate and parse coordinates
-        try:
-            minx, miny = float(minx), float(miny)
-            maxx, maxy = float(maxx), float(maxy)
-        except (ValueError, TypeError) as e:
-            logger.error(f"Invalid coordinates: {e}")
+        # Get valid layers
+        layers = Layer.objects.filter(
+            layer_id__in=layer_ids,
+            server__isnull=False
+        ).select_related('server')
+
+        if not layers:
+            return JsonResponse({'success': False, 'error': 'No valid layers found'})
+
+        # Check user permissions
+        user = request.user
+        if hasattr(user, 'connects') and user.connects < len(layers):
             return JsonResponse({
                 'success': False,
-                'error': f'Invalid coordinates: {str(e)}'
-            }, status=200)  # Changed from 400 to 200
+                'error': f'Need {len(layers)} connects, you have {user.connects}'
+            })
 
-        # Parse optional center point
-        try:
-            if lat and lng:
-                lat, lng = float(lat), float(lng)
-            else:
-                lat = (miny + maxy) / 2
-                lng = (minx + maxx) / 2
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Error parsing center point, using calculated center: {e}")
-            lat = (miny + maxy) / 2
-            lng = (minx + maxx) / 2
+        # Create optimized DXF document
+        doc = create_optimized_dxf()
+        msp = doc.modelspace()
 
-        # Enforce area limits
-        width = maxx - minx
-        height = maxy - miny
-        original_bounds = (minx, miny, maxx, maxy)
+        # Determine proper coordinate system for Australia
+        coordinate_system = get_australian_coordinate_system(center_lat, center_lng)
 
-        if width > MAX_DOWNLOAD_AREA * 2 or height > MAX_DOWNLOAD_AREA * 2:
-            minx = lng - MAX_DOWNLOAD_AREA
-            maxx = lng + MAX_DOWNLOAD_AREA
-            miny = lat - MAX_DOWNLOAD_AREA
-            maxy = lat + MAX_DOWNLOAD_AREA
-            logger.info(f"Area limited from {original_bounds} to ({minx}, {miny}, {maxx}, {maxy})")
-            processing_report['debug_info'].append(f"Area was limited to {MAX_DOWNLOAD_AREA} degrees")
-
-        # Get layers
-        try:
-            layers = Layer.objects.filter(layer_id__in=layer_ids).select_related('server')
-            if not layers.exists():
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No valid layers found in database'
-                }, status=200)  # Changed from 404 to 200
-
-            logger.info(f"Found {layers.count()} layers in database")
-        except Exception as e:
-            logger.error(f"Database error fetching layers: {e}")
-            return JsonResponse({
-                'success': False,
-                'error': f'Database error: {str(e)}'
-            }, status=200)  # Changed from 500 to 200
-
-        # Check user connects (optional)
-        if hasattr(user, 'connects'):
-            if user.connects < len(layers):
-                return JsonResponse({
-                    'success': False,
-                    'error': f'Not enough connects. Need {len(layers)}, you have {user.connects}'
-                }, status=200)  # Changed from 403 to 200
-
-        # Create DXF document
-        try:
-            doc = ezdxf.new('R2010')
-            msp = doc.modelspace()
-            logger.debug("DXF document created successfully")
-        except Exception as e:
-            logger.error(f"Failed to create DXF document: {e}")
-            return JsonResponse({
-                'success': False,
-                'error': 'Failed to create DXF document'
-            }, status=200)
-
-        # Insert block definitions
-        try:
-            insert_blocks(doc)
-            logger.debug("Block definitions inserted")
-        except Exception as e:
-            logger.warning(f"Error inserting block definitions: {e}")
-            processing_report['errors'].append(f"Block definitions warning: {str(e)}")
-
-        # Determine spatial reference
-        try:
-            converter = GDA2020Converter()
-            out_sr_wkid = converter.get_wkid(lat, lng, datum='gda94')
-
-            if out_sr_wkid is None:
-                out_sr_wkid = 28356  # Default to GDA94 MGA Zone 56
-                logger.warning(f"Location {lat}, {lng} outside Australia, using default WKID 28356")
-                processing_report['debug_info'].append(f"Using default WKID 28356")
-            else:
-                logger.info(f"Using WKID {out_sr_wkid} for location {lat}, {lng}")
-                processing_report['debug_info'].append(f"Using WKID {out_sr_wkid}")
-        except Exception as e:
-            logger.warning(f"Error determining spatial reference: {e}, using default")
-            out_sr_wkid = 28356
-            processing_report['debug_info'].append(f"WKID error, using default 28356")
-
-        # Process each layer
-        for layer in layers:
-            layer_name = layer.name
-            processing_report['attempted_layers'].append(layer_name)
-            layer_feature_count = 0
-            layer_errors = []
-
-            logger.info(f"Processing layer: {layer_name} (ID: {layer.layer_id}, Number: {layer.number})")
-
-            try:
-                # Create layer in DXF
-                try:
-                    if layer_name not in doc.layers:
-                        doc.layers.new(name=layer_name)
-                        logger.debug(f"Created DXF layer: {layer_name}")
-                except Exception as e:
-                    logger.warning(f"Could not create DXF layer '{layer_name}': {e}")
-                    layer_errors.append(f"Layer creation warning: {str(e)}")
-
-                # Create Text layer for labels
-                try:
-                    if 'Text' not in doc.layers:
-                        doc.layers.new(name='Text')
-                except:
-                    pass
-
-                # Check if server exists
-                if not layer.server:
-                    logger.error(f"No server configured for layer {layer_name}")
-                    layer_errors.append("No server configured")
-                    processing_report['failed_layers'].append({
-                        'name': layer_name,
-                        'errors': layer_errors
-                    })
-                    continue
-
-                # Log the request we're about to make
-                logger.debug(f"Fetching from: {layer.server.url}/{layer.number}")
-                logger.debug(f"Bounds: {minx},{miny},{maxx},{maxy}")
-
-                # Fetch features with detailed error tracking
-                features_data = []
-                try:
-                    features_data = fetch_layer_features_with_attributes(
-                        layer, minx, miny, maxx, maxy, out_sr=out_sr_wkid
-                    )
-
-                    if not features_data:
-                        logger.warning(f"No features returned for layer {layer_name}")
-                        layer_errors.append("No features in area")
-                    else:
-                        logger.info(f"Fetched {len(features_data)} features for layer {layer_name}")
-
-                except requests.exceptions.Timeout:
-                    logger.error(f"Timeout fetching layer {layer_name}")
-                    layer_errors.append("Request timeout")
-                except requests.exceptions.RequestException as e:
-                    logger.error(f"Network error for layer {layer_name}: {e}")
-                    layer_errors.append(f"Network error: {str(e)[:100]}")
-                except Exception as e:
-                    logger.error(f"Error fetching layer {layer_name}: {e}", exc_info=True)
-                    layer_errors.append(f"Fetch error: {str(e)[:100]}")
-
-                # Process each feature
-                if features_data:
-                    for feature_index, feature_info in enumerate(features_data):
-                        try:
-                            geom = feature_info.get('geometry')
-                            if geom and geom.valid:
-                                try:
-                                    # Use the safer drawing function
-                                    success = draw_feature_to_dxf_safe(
-                                        msp,
-                                        geom,
-                                        feature_info.get('attributes', {}),
-                                        layer
-                                    )
-                                    if success:
-                                        layer_feature_count += 1
-                                        processing_report['total_features'] += 1
-                                    else:
-                                        logger.debug(f"Failed to draw feature {feature_index} in {layer_name}")
-                                except Exception as e:
-                                    logger.debug(f"Error drawing feature {feature_index} in {layer_name}: {e}")
-                                    if feature_index < 5:  # Only log first few errors
-                                        layer_errors.append(f"Feature {feature_index} draw error")
-                            else:
-                                logger.debug(f"Invalid geometry for feature {feature_index} in {layer_name}")
-                        except Exception as e:
-                            logger.debug(f"Error processing feature {feature_index} in {layer_name}: {e}")
-                            continue
-
-                # Categorize layer result
-                if layer_feature_count > 0:
-                    if layer_errors:
-                        processing_report['partial_layers'].append({
-                            'name': layer_name,
-                            'features': layer_feature_count,
-                            'errors': layer_errors[:5]  # Limit error count
-                        })
-                    else:
-                        processing_report['successful_layers'].append({
-                            'name': layer_name,
-                            'features': layer_feature_count
-                        })
-
-                    # Log download record
-                    try:
-                        DownloadRecord.objects.create(
-                            user=user,
-                            layer=layer,
-                            latitude=lat,
-                            longitude=lng
-                        )
-                    except Exception as e:
-                        logger.warning(f"Could not create download record: {e}")
-                else:
-                    processing_report['failed_layers'].append({
-                        'name': layer_name,
-                        'errors': layer_errors if layer_errors else ['No features found in area']
-                    })
-
-            except Exception as e:
-                logger.error(f"Unexpected error processing layer {layer_name}: {e}", exc_info=True)
-                processing_report['failed_layers'].append({
-                    'name': layer_name,
-                    'errors': [f"Unexpected error: {str(e)[:100]}"]
-                })
-
-        # Log final summary
-        logger.info(
-            f"Export summary - Total features: {processing_report['total_features']}, "
-            f"Successful: {len(processing_report['successful_layers'])}, "
-            f"Partial: {len(processing_report['partial_layers'])}, "
-            f"Failed: {len(processing_report['failed_layers'])}"
+        # Process layers efficiently
+        export_summary = process_layers_for_export(
+            layers, bounds, msp, coordinate_system
         )
 
-        # Check if we have any successful exports
-        if processing_report['total_features'] == 0:
-            # Return user-friendly error message
-            failed_names = [l['name'] for l in processing_report['failed_layers']]
-
+        # Check if we got any features
+        if export_summary['total_features'] == 0:
             return JsonResponse({
                 'success': False,
-                'error': 'No features could be exported from the selected area',
-                'details': {
-                    'message': 'The selected layers may not have data in this area. Try zooming to a different location or selecting different layers.',
-                    'attempted_layers': len(processing_report['attempted_layers']),
-                    'failed_layers': failed_names[:10],  # Limit list size
-                    'suggestions': [
-                        'Zoom to a different area',
-                        'Select different layers',
-                        'Check if layers are properly configured',
-                        'Verify the area contains infrastructure'
-                    ]
-                },
-                'debug': processing_report['debug_info'] if settings.DEBUG else None
-            }, status=200)  # Important: Changed from 404 to 200
+                'error': 'No infrastructure found in selected area',
+                'suggestion': 'Try a different location or zoom out slightly'
+            })
 
-        # Deduct connects only for successful/partial layers
-        successful_count = len(processing_report['successful_layers']) + len(processing_report['partial_layers'])
-        if hasattr(user, 'connects') and successful_count > 0:
-            try:
-                user.connects -= successful_count
-                user.save()
-                logger.info(f"Deducted {successful_count} connects from user {user.username}")
-            except Exception as e:
-                logger.error(f"Error updating user connects: {e}")
+        # Deduct connects for successful export
+        if hasattr(user, 'connects'):
+            user.connects -= export_summary['successful_layers']
+            user.save()
 
-        # Generate DXF file
-        try:
-            response = HttpResponse(content_type='application/dxf')
-            filename = f"export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.dxf"
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        # Log successful exports
+        log_export_records(user, layers, center_lat, center_lng)
 
-            # Write DXF
-            doc.write(response)
+        # Generate and return DXF file
+        response = HttpResponse(content_type='application/dxf')
+        filename = f"infrastructure_{datetime.now().strftime('%Y%m%d_%H%M%S')}.dxf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
-            logger.info(
-                f"Successfully exported DXF for {user.username}: "
-                f"{processing_report['total_features']} features from {successful_count} layers"
-            )
+        doc.write(response)
 
-            return response
+        logger.info(f"Successfully exported {export_summary['total_features']} features "
+                    f"from {export_summary['successful_layers']} layers for {user.username}")
 
-        except Exception as e:
-            logger.error(f"Error generating DXF response: {e}", exc_info=True)
-            return JsonResponse({
-                'success': False,
-                'error': 'Failed to generate DXF file'
-            }, status=200)
+        return response
 
     except Exception as e:
-        logger.error(f"Critical export error: {e}", exc_info=True)
+        logger.error(f"Export failed for {user.username}: {e}")
         return JsonResponse({
             'success': False,
-            'error': 'Export failed unexpectedly',
-            'details': str(e) if settings.DEBUG else 'Please contact support'
-        }, status=200)
+            'error': 'Export failed. Please try again or contact support.'
+        })
 
 
+def create_optimized_dxf():
+    """Create DXF document optimized for Australian infrastructure"""
+
+    doc = ezdxf.new('R2010')  # Compatible with most CAD software
+
+    # Set proper units and precision for Australian infrastructure
+    doc.header['$INSUNITS'] = 6  # Meters
+    doc.header['$LUNITS'] = 2  # Decimal
+    doc.header['$LUPREC'] = 3  # 3 decimal places
+    doc.header['$AUNITS'] = 0  # Decimal degrees
+    doc.header['$AUPREC'] = 6  # 6 decimal places for angles
+
+    # Add infrastructure-specific block definitions
+    create_infrastructure_blocks(doc)
+
+    return doc
+
+
+def get_australian_coordinate_system(lat, lng):
+    """Get appropriate Australian coordinate system"""
+
+    converter = GDA2020Converter()
+
+    # Use GDA2020 (current Australian standard)
+    wkid = converter.get_wkid(lat, lng, datum='gda2020')
+
+    if wkid is None:
+        # Fallback based on longitude
+        if 115.0 <= lng <= 117.0:  # Western Australia
+            wkid = 7850  # GDA2020 Zone 50
+        elif 144.0 <= lng <= 146.0:  # Victoria/Melbourne
+            wkid = 7855  # GDA2020 Zone 55
+        elif 150.0 <= lng <= 154.0:  # NSW/QLD Eastern
+            wkid = 7856  # GDA2020 Zone 56
+        else:
+            wkid = 7855  # Default to Zone 55
+
+    logger.info(f"Using coordinate system EPSG:{wkid} for location ({lat:.4f}, {lng:.4f})")
+    return wkid
+
+
+def process_layers_for_export(layers, bounds, msp, coordinate_system):
+    """Process layers efficiently for export"""
+
+    summary = {
+        'total_features': 0,
+        'successful_layers': 0,
+        'failed_layers': []
+    }
+
+    for layer in layers:
+        logger.info(f"Processing layer: {layer.name}")
+
+        try:
+            # Create DXF layer with proper naming
+            layer_name = sanitize_layer_name(layer.name)
+            if layer_name not in msp.doc.layers:
+                dxf_layer = msp.doc.layers.new(name=layer_name)
+                set_layer_properties(dxf_layer, layer)
+
+            # Fetch features efficiently
+            features = fetch_layer_features_with_attributes(
+                layer,
+                bounds['minx'], bounds['miny'], bounds['maxx'], bounds['maxy'],
+                limit=MAX_FEATURES_PER_LAYER,
+                out_sr=coordinate_system,
+                preview_mode=False
+            )
+
+            if not features:
+                logger.warning(f"No features found for {layer.name}")
+                summary['failed_layers'].append(layer.name)
+                continue
+
+            # Draw features to DXF
+            feature_count = 0
+            for feature in features:
+                if draw_infrastructure_feature(msp, feature, layer_name):
+                    feature_count += 1
+
+            if feature_count > 0:
+                summary['total_features'] += feature_count
+                summary['successful_layers'] += 1
+                logger.info(f"Added {feature_count} features from {layer.name}")
+            else:
+                summary['failed_layers'].append(layer.name)
+
+        except Exception as e:
+            logger.error(f"Error processing layer {layer.name}: {e}")
+            summary['failed_layers'].append(layer.name)
+
+    return summary
+
+
+def create_infrastructure_blocks(doc):
+    """Create optimized block definitions for Australian infrastructure"""
+
+    blocks = {
+        'HYDRANT': {
+            'entities': [
+                ('circle', (0, 0), 0.3, colors.BLUE),
+                ('text', 'FH', (0.4, 0.2), 0.3)
+            ]
+        },
+        'VALVE': {
+            'entities': [
+                ('rectangle', (-0.3, -0.2), (0.3, 0.2), colors.BLUE),
+                ('text', 'V', (0.4, 0.1), 0.25)
+            ]
+        },
+        'MANHOLE': {
+            'entities': [
+                ('circle', (0, 0), 0.4, colors.GREEN),
+                ('text', 'MH', (0.5, 0.2), 0.3)
+            ]
+        },
+        'PIT': {
+            'entities': [
+                ('circle', (0, 0), 0.25, colors.CYAN),
+                ('text', 'P', (0.3, 0.1), 0.25)
+            ]
+        },
+        'POLE': {
+            'entities': [
+                ('circle', (0, 0), 0.2, colors.RED),
+                ('text', 'EP', (0.3, 0.1), 0.25)
+            ]
+        }
+    }
+
+    for block_name, block_def in blocks.items():
+        if block_name not in doc.blocks:
+            block = doc.blocks.new(name=block_name)
+
+            for entity in block_def['entities']:
+                if entity[0] == 'circle':
+                    block.add_circle(entity[1], entity[2], dxfattribs={'color': entity[3]})
+                elif entity[0] == 'rectangle':
+                    coords = [entity[1], (entity[2][0], entity[1][1]), entity[2], (entity[1][0], entity[2][1])]
+                    block.add_lwpolyline(coords, close=True, dxfattribs={'color': entity[3]})
+                elif entity[0] == 'text':
+                    block.add_text(entity[1], dxfattribs={
+                        'insert': entity[2],
+                        'height': entity[3]
+                    })
+
+
+def sanitize_layer_name(name):
+    """Clean layer names for DXF compatibility"""
+
+    if not name:
+        return "INFRASTRUCTURE"
+
+    # Replace problematic characters
+    sanitized = name.upper().replace(' ', '_').replace('-', '_')
+
+    # Remove special characters
+    allowed_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'
+    sanitized = ''.join(c for c in sanitized if c in allowed_chars)
+
+    # Ensure valid start
+    if sanitized and sanitized[0].isdigit():
+        sanitized = 'L_' + sanitized
+
+    return sanitized[:31]  # DXF layer name limit
+
+
+def set_layer_properties(dxf_layer, layer):
+    """Set DXF layer properties based on infrastructure type"""
+
+    layer_name_lower = layer.name.lower() if layer.name else ''
+
+    # Set colors based on Australian infrastructure standards
+    if any(word in layer_name_lower for word in ['water', 'drinking']):
+        dxf_layer.dxf.color = colors.BLUE
+    elif any(word in layer_name_lower for word in ['sewer', 'waste']):
+        dxf_layer.dxf.color = colors.GREEN
+    elif any(word in layer_name_lower for word in ['storm', 'drain']):
+        dxf_layer.dxf.color = colors.CYAN
+    elif any(word in layer_name_lower for word in ['electric', 'power']):
+        dxf_layer.dxf.color = colors.RED
+    elif any(word in layer_name_lower for word in ['gas']):
+        dxf_layer.dxf.color = colors.YELLOW
+    elif any(word in layer_name_lower for word in ['communication', 'telecom']):
+        dxf_layer.dxf.color = colors.MAGENTA
+    else:
+        dxf_layer.dxf.color = colors.WHITE
+
+
+def draw_infrastructure_feature(msp, feature, layer_name):
+    """Draw infrastructure feature to DXF with proper attributes"""
+
+    try:
+        geometry = feature.get('geometry')
+        attributes = feature.get('attributes', {})
+
+        if not geometry or not geometry.valid:
+            return False
+
+        geom_type = geometry.geom_type
+
+        if geom_type == 'Point':
+            draw_infrastructure_point(msp, geometry, attributes, layer_name)
+
+        elif geom_type == 'LineString':
+            draw_infrastructure_line(msp, geometry, attributes, layer_name)
+
+        elif geom_type == 'Polygon':
+            draw_infrastructure_polygon(msp, geometry, attributes, layer_name)
+
+        elif geom_type.startswith('Multi'):
+            # Handle multi-geometries
+            for geom_part in geometry:
+                part_feature = {'geometry': geom_part, 'attributes': attributes}
+                draw_infrastructure_feature(msp, part_feature, layer_name)
+
+        return True
+
+    except Exception as e:
+        logger.debug(f"Error drawing feature: {e}")
+        return False
+
+
+def draw_infrastructure_point(msp, point, attributes, layer_name):
+    """Draw infrastructure point with appropriate symbol"""
+
+    x, y = point.x, point.y
+    layer_name_lower = layer_name.lower()
+
+    # Choose appropriate block
+    if 'hydrant' in layer_name_lower:
+        msp.add_blockref('HYDRANT', (x, y), dxfattribs={'layer': layer_name})
+    elif 'valve' in layer_name_lower:
+        msp.add_blockref('VALVE', (x, y), dxfattribs={'layer': layer_name})
+    elif 'manhole' in layer_name_lower or 'maintenance' in layer_name_lower:
+        msp.add_blockref('MANHOLE', (x, y), dxfattribs={'layer': layer_name})
+    elif 'pit' in layer_name_lower:
+        msp.add_blockref('PIT', (x, y), dxfattribs={'layer': layer_name})
+    elif 'pole' in layer_name_lower or 'electric' in layer_name_lower:
+        msp.add_blockref('POLE', (x, y), dxfattribs={'layer': layer_name})
+    else:
+        # Default point
+        msp.add_circle((x, y), 0.2, dxfattribs={'layer': layer_name})
+
+    # Add attribute labels
+    add_infrastructure_labels(msp, (x, y), attributes, layer_name)
+
+
+def draw_infrastructure_line(msp, linestring, attributes, layer_name):
+    """Draw infrastructure line with labels"""
+
+    coords = list(linestring.coords)
+    if len(coords) < 2:
+        return
+
+    # Draw the line
+    msp.add_lwpolyline(coords, dxfattribs={'layer': layer_name})
+
+    # Add labels along the line
+    label_text = extract_infrastructure_label(attributes)
+    if label_text:
+        add_line_labels(msp, coords, label_text, layer_name)
+
+
+def draw_infrastructure_polygon(msp, polygon, attributes, layer_name):
+    """Draw infrastructure polygon"""
+
+    # Draw exterior
+    exterior_coords = list(polygon.exterior.coords)
+    if len(exterior_coords) >= 3:
+        msp.add_lwpolyline(exterior_coords, close=True, dxfattribs={'layer': layer_name})
+
+    # Draw holes
+    for interior in polygon.interiors:
+        interior_coords = list(interior.coords)
+        if len(interior_coords) >= 3:
+            msp.add_lwpolyline(interior_coords, close=True, dxfattribs={'layer': layer_name})
+
+
+def extract_infrastructure_label(attributes):
+    """Extract meaningful label from attributes"""
+
+    labels = []
+
+    # Check for diameter/size
+    for key, value in attributes.items():
+        key_lower = key.lower()
+        if value is not None and isinstance(value, (int, float)) and value > 0:
+            if 'diam' in key_lower:
+                labels.append(f"Ø{int(value)}mm")
+            elif 'width' in key_lower and value < 10:  # Assume meters if small
+                labels.append(f"W{value:.1f}m")
+            elif 'height' in key_lower and value < 10:
+                labels.append(f"H{value:.1f}m")
+
+    # Check for material
+    for key, value in attributes.items():
+        key_lower = key.lower()
+        if 'material' in key_lower or 'mat' in key_lower:
+            if value and isinstance(value, str):
+                labels.append(str(value)[:10])  # Limit length
+
+    return ' '.join(labels) if labels else None
+
+
+def add_infrastructure_labels(msp, point, attributes, layer_name):
+    """Add attribute labels near infrastructure points"""
+
+    x, y = point
+    label_text = extract_infrastructure_label(attributes)
+
+    if label_text:
+        msp.add_text(label_text, dxfattribs={
+            'insert': (x + TEXT_OFFSET, y + TEXT_OFFSET),
+            'height': TEXT_HEIGHT,
+            'layer': layer_name
+        })
+
+
+def add_line_labels(msp, coords, label_text, layer_name):
+    """Add labels along infrastructure lines"""
+
+    if len(coords) < 2 or not label_text:
+        return
+
+    # Label at midpoint of longest segment
+    max_length = 0
+    mid_point = None
+
+    for i in range(len(coords) - 1):
+        x1, y1 = coords[i]
+        x2, y2 = coords[i + 1]
+        length = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+        if length > max_length:
+            max_length = length
+            mid_point = ((x1 + x2) / 2, (y1 + y2) / 2)
+
+    if mid_point and max_length > 1.0:  # Only label longer segments
+        msp.add_text(label_text, dxfattribs={
+            'insert': (mid_point[0], mid_point[1] + TEXT_HEIGHT),
+            'height': TEXT_HEIGHT,
+            'layer': layer_name
+        })
+
+
+def log_export_records(user, layers, lat, lng):
+    """Log download records efficiently"""
+
+    records = []
+    for layer in layers:
+        records.append(DownloadRecord(
+            user=user,
+            layer=layer,
+            latitude=lat,
+            longitude=lng
+        ))
+
+    # Bulk create for efficiency
+    DownloadRecord.objects.bulk_create(records, ignore_conflicts=True)
+
+
+# Additional utility function for better error handling
+def validate_export_request(layer_ids, bounds, user):
+    """Validate export request parameters"""
+
+    errors = []
+
+    if not layer_ids:
+        errors.append("No layers selected")
+
+    if not all(isinstance(coord, (int, float)) for coord in bounds.values()):
+        errors.append("Invalid coordinate values")
+
+    # Check bounds are reasonable
+    width = bounds['maxx'] - bounds['minx']
+    height = bounds['maxy'] - bounds['miny']
+
+    if width <= 0 or height <= 0:
+        errors.append("Invalid bounding box")
+
+    if width > 1 or height > 1:  # Very large area
+        errors.append("Selected area is too large")
+
+    return errors
 def draw_feature_to_dxf_safe(msp, geom, attributes, layer):
     """
     Safer version of draw_feature_to_dxf with additional error handling.

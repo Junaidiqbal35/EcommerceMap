@@ -1,4 +1,3 @@
-# management/commands/fix_all_infrastructure.py
 from django.core.management.base import BaseCommand
 from django.db.models import Max
 from django.contrib.gis.geos import Point
@@ -11,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Fix ALL infrastructure layers across Australia - not just Perth'
+    help = 'Fix ALL infrastructure layers across Australia'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -75,7 +74,7 @@ class Command(BaseCommand):
                     zone_info = self.gda_converter.get_zone_info(center_lat, center_lng)
                     valid_servers.append((server, zone_info))
                     self.stdout.write(
-                        f"  ✅ {server.name} -> {zone_info['description']} (GDA2020: {zone_info['gda2020_wkid']})")
+                        f"{server.name} -> {zone_info['description']} (GDA2020: {zone_info['gda2020_wkid']})")
                 else:
                     invalid_servers.append(server)
                     self.stdout.write(f"  ⚠️  {server.name} -> Coordinates outside Australia")
@@ -91,16 +90,16 @@ class Command(BaseCommand):
                     valid_layers.append((layer, zone_info))
                 else:
                     invalid_layers.append(layer)
-                    self.stdout.write(f"  ⚠️  Layer {layer.layer_id} ({layer.name}) -> Coordinates outside Australia")
+                    self.stdout.write(f"Layer {layer.layer_id} ({layer.name}) -> Coordinates outside Australia")
 
-        self.stdout.write(f"\n📊 COORDINATE VALIDATION SUMMARY:")
+        self.stdout.write(f"\nCOORDINATE VALIDATION SUMMARY:")
         self.stdout.write(f"  Valid servers: {len(valid_servers)}")
         self.stdout.write(f"  Invalid servers: {len(invalid_servers)}")
         self.stdout.write(f"  Valid layers: {len(valid_layers)}")
         self.stdout.write(f"  Invalid layers: {len(invalid_layers)}")
 
     def fix_invalid_extents(self, server_id=None):
-        """Fix servers with invalid extents (global bounds, etc.)"""
+        """Fix servers with invalid extents (global bounds)"""
         self.stdout.write("🔧 Fixing invalid server extents...")
 
         servers = Server.objects.filter(id=server_id) if server_id else Server.objects.all()
@@ -119,7 +118,7 @@ class Command(BaseCommand):
             else:
                 width = abs(server.extent_max_x - server.extent_min_x)
                 height = abs(server.extent_max_y - server.extent_min_y)
-                if width > 25 or height > 25:  # Larger than continent
+                if width > 25 or height > 25:
                     needs_fix = True
                     reason = f"Too large ({width:.1f}° x {height:.1f}°)"
 
@@ -156,18 +155,18 @@ class Command(BaseCommand):
                         server.extent_max_y = ymax
                         server.save()
 
-                        self.stdout.write(f"    ✅ Updated from service metadata")
+                        self.stdout.write(f" Updated from service metadata")
                         return True
                     else:
-                        self.stdout.write(f"    ⚠️  Service coordinates don't look like Australian lat/lng")
+                        self.stdout.write(f" Service coordinates don't look like Australian lat/lng")
 
         except Exception as e:
-            self.stdout.write(f"    ❌ Service request failed: {e}")
+            self.stdout.write(f" Service request failed: {e}")
 
         return False
 
     def _apply_regional_extent(self, server):
-        """Apply reasonable regional extent based on server name/URL"""
+        """Applying regional extent based on server name/URL"""
         regional_extents = {
             # State/territory extents
             'wa': (112.0, -35.0, 129.0, -13.5),  # Western Australia
@@ -209,7 +208,7 @@ class Command(BaseCommand):
             server.extent_min_x, server.extent_min_y, server.extent_max_x, server.extent_max_y = (
             113.0, -44.0, 154.0, -10.0)
             server.save()
-            self.stdout.write(f"    🌏 Applied Australia-wide extent as fallback")
+            self.stdout.write(f"Applied Australia-wide extent as fallback")
 
     def discover_missing_layers(self, server_id=None):
         """Discover and create missing layers for servers without any"""
@@ -227,7 +226,7 @@ class Command(BaseCommand):
         total_created = 0
 
         for server in servers_without_layers:
-            self.stdout.write(f"\n🔧 Processing {server.name}...")
+            self.stdout.write(f"\ Processing {server.name}...")
 
             # First try to discover from service
             discovered_layers = self._discover_layers_from_service(server)
@@ -235,7 +234,7 @@ class Command(BaseCommand):
             if discovered_layers:
                 created = self._create_layers_from_discovery(server, discovered_layers)
                 total_created += created
-                self.stdout.write(f"  ✅ Created {created} layers from service discovery")
+                self.stdout.write(f" Created {created} layers from service discovery")
             else:
                 # Fallback to intelligent guessing based on service type
                 created = self._create_default_layers(server)
@@ -378,7 +377,7 @@ class Command(BaseCommand):
                 {'name': 'Infrastructure Points', 'type': 'point', 'symbol': 'infrastructure_point'}
             ]
 
-        # Create the layers
+        # Creating the layers
         created_count = 0
         center_x, center_y = self._get_server_center(server)
 
@@ -437,23 +436,23 @@ class Command(BaseCommand):
                     if 'error' not in data:
                         if response_time > 5:
                             results['slow'].append((server, response_time))
-                            self.stdout.write(f"    ⚠️  SLOW: {response_time:.1f}s")
+                            self.stdout.write(f" SLOW: {response_time:.1f}s")
                         else:
                             results['working'].append((server, response_time))
-                            self.stdout.write(f"    ✅ OK: {response_time:.1f}s")
+                            self.stdout.write(f" OK: {response_time:.1f}s")
                     else:
                         results['failed'].append((server, data['error']))
-                        self.stdout.write(f"    ❌ ERROR: {data['error'].get('message', 'Unknown')}")
+                        self.stdout.write(f"ERROR: {data['error'].get('message', 'Unknown')}")
                 else:
                     results['failed'].append((server, f"HTTP {response.status_code}"))
-                    self.stdout.write(f"    ❌ HTTP {response.status_code}")
+                    self.stdout.write(f" HTTP {response.status_code}")
 
             except requests.exceptions.Timeout:
                 results['failed'].append((server, "Timeout"))
-                self.stdout.write(f"    ⏰ TIMEOUT")
+                self.stdout.write(f"TIMEOUT")
             except Exception as e:
                 results['failed'].append((server, str(e)))
-                self.stdout.write(f"    ❌ ERROR: {e}")
+                self.stdout.write(f" ERROR: {e}")
 
         # Summary
         self.stdout.write(f"\n📊 SERVICE TEST SUMMARY:")
@@ -462,12 +461,11 @@ class Command(BaseCommand):
         self.stdout.write(f"  Failed: {len(results['failed'])}")
 
         if results['failed']:
-            self.stdout.write(f"\n❌ FAILED SERVICES:")
-            for server, error in results['failed'][:5]:  # Show first 5
+            self.stdout.write(f"\n FAILED SERVICES:")
+            for server, error in results['failed'][:5]:
                 self.stdout.write(f"  - {server.name}: {error}")
 
 
-# management/commands/export_gda_zones.py
 class GDAZoneExportCommand(BaseCommand):
     help = 'Export GDA2020 zone information for all infrastructure'
 

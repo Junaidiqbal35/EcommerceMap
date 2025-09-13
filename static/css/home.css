@@ -40,8 +40,8 @@ body {
 /* Layer Panel - Modern Card Design */
 #layerPanel {
     position: absolute;
-    top: 20px;
-    left: 20px;
+    top: 70px;
+    right: 20px;
     z-index: 1000;
     background: white;
     border-radius: 12px;
@@ -354,23 +354,34 @@ body {
 }
 
 /* Nearby Sidebar */
+/* Nearby Sidebar - Left Side */
 .nearby-sidebar {
     position: absolute;
     top: 0;
-    right: -420px;
+    left: -420px; /* Hidden by default, slides in from left */
     width: 420px;
     height: 100%;
     background: white;
-    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1); /* Right shadow since it's on left */
     z-index: 1000;
-    transition: right 0.3s ease;
+    transition: left 0.3s ease; /* Animate left position */
     display: flex;
     flex-direction: column;
 }
 
 .nearby-sidebar.open {
-    right: 0;
+    left: 0; /* Slides in to show */
 }
+
+/* Responsive: Full width on mobile */
+@media (max-width: 768px) {
+    .nearby-sidebar {
+        width: 100%;
+        left: -100%; /* Full width slide */
+    }
+}
+
+
 
 .sidebar-header {
     padding: 20px;

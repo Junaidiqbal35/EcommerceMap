@@ -1,17 +1,20 @@
-/* Modern GIS Map Interface Styles */
+/* Modern GIS Map Interface Styles - Teal Theme */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-    --primary-color: #6366f1;
-    --secondary-color: #8b5cf6;
+    --primary-color: #0d9488;
+    --secondary-color: #14b8a6;
+    --accent-color: #06b6d4;
     --success-color: #10b981;
     --warning-color: #f59e0b;
     --error-color: #ef4444;
     --info-color: #3b82f6;
-    --dark-bg: #1f2937;
+    --dark-bg: #1e293b;
     --light-bg: #ffffff;
     --border-color: #e5e7eb;
-    --text-primary: #111827;
-    --text-secondary: #6b7280;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
@@ -25,7 +28,7 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     overflow: hidden;
 }
 
@@ -34,7 +37,7 @@ body {
     width: 100vw;
     height: 100vh;
     position: relative;
-    background: #f3f4f6;
+    background: #f8fafc;
 }
 
 /* Layer Panel - Modern Card Design */
@@ -122,13 +125,13 @@ body {
     border-radius: 10px;
     font-size: 14px;
     transition: all 0.2s;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 12px center;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 12px center;
 }
 
 .search-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
 }
 
 /* Filter Buttons */
@@ -157,7 +160,7 @@ body {
 
 .filter-btn:hover {
     border-color: var(--primary-color);
-    background: #f0f1ff;
+    background: #f0fdfa;
 }
 
 .filter-btn.active {
@@ -248,9 +251,9 @@ body {
 }
 
 .layer-item.layer-active {
-    background: linear-gradient(135deg, #eff6ff, #f0f9ff);
-    border-color: var(--info-color);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    background: linear-gradient(135deg, #f0fdfa, #ccfbf1);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
 }
 
 .layer-item.layer-loading {
@@ -354,38 +357,34 @@ body {
 }
 
 /* Nearby Sidebar */
-/* Nearby Sidebar - Left Side */
 .nearby-sidebar {
     position: absolute;
     top: 0;
-    left: -420px; /* Hidden by default, slides in from left */
+    left: -420px;
     width: 420px;
     height: 100%;
     background: white;
-    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1); /* Right shadow since it's on left */
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
     z-index: 1000;
-    transition: left 0.3s ease; /* Animate left position */
+    transition: left 0.3s ease;
     display: flex;
     flex-direction: column;
 }
 
 .nearby-sidebar.open {
-    left: 0; /* Slides in to show */
+    left: 0;
 }
 
-/* Responsive: Full width on mobile */
 @media (max-width: 768px) {
     .nearby-sidebar {
         width: 100%;
-        left: -100%; /* Full width slide */
+        left: -100%;
     }
 }
 
-
-
 .sidebar-header {
     padding: 20px;
-    background: linear-gradient(135deg, var(--warning-color), #f97316);
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: white;
     display: flex;
     justify-content: space-between;
@@ -588,7 +587,7 @@ body {
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
-    background: linear-gradient(135deg, #047857, #10b981);
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: white;
     display: flex;
     align-items: center;
@@ -596,7 +595,7 @@ body {
 }
 
 .basemap-toggle:hover {
-    background: linear-gradient(135deg, #059669, #34d399);
+    background: linear-gradient(135deg, var(--secondary-color), var(--accent-color));
 }
 
 .basemap-options {
@@ -652,7 +651,7 @@ body {
     transform: translateY(0);
 }
 
-.toast-info { background: linear-gradient(135deg, var(--info-color), #60a5fa); }
+.toast-info { background: linear-gradient(135deg, var(--accent-color), #60a5fa); }
 .toast-success { background: linear-gradient(135deg, var(--success-color), #34d399); }
 .toast-warning { background: linear-gradient(135deg, var(--warning-color), #fbbf24); }
 .toast-error { background: linear-gradient(135deg, var(--error-color), #f87171); }
@@ -741,12 +740,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #d1d5db;
+    background: #cbd5e1;
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #9ca3af;
+    background: #94a3b8;
 }
 
 /* Responsive adjustments */

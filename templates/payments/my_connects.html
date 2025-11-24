@@ -1,47 +1,382 @@
 {% extends "base.html" %}
+{% load static %}
+{% load payment_filters %}
 
-{#{% block title %}My Connects {% endblock %}#}
+{% block extrahead %}
+<style>
+    /* Custom styles that work with Bootstrap */
+    .page-header {
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        padding: 4rem 0 6rem;
+        margin-bottom: 0;
+        position: relative;
+    }
+    
+    .page-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg width="60" height="60" xmlns="http://www.w3.org/2000/svg"><circle cx="30" cy="30" r="1.5" fill="white" opacity="0.15"/></svg>');
+    }
+    
+    .page-title {
+        color: white;
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin: 0;
+        position: relative;
+    }
+    
+    .balance-card-wrapper {
+        margin-top: -4rem;
+        margin-bottom: 3rem;
+    }
+    
+    .balance-card {
+        border: none;
+        border-radius: 1.5rem;
+        box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+    
+    .balance-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 3rem 2rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .balance-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: #6c757d;
+        font-weight: 700;
+    }
+    
+    .balance-amount {
+        font-size: 4rem;
+        font-weight: 900;
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin: 1rem 0;
+    }
+    
+    .btn-buy-connects {
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);  
+        border: none;
+        padding: 0.875rem 2.5rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-radius: 2rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 0.5rem 1.5rem rgba(102, 126, 234, 0.3);
+    }
+    
+    .btn-buy-connects:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.75rem 2rem rgba(102, 126, 234, 0.4);
+    }
+    
+    .stats-section {
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .stat-item {
+        padding: 2rem;
+        text-align: center;
+        border-right: 1px solid #dee2e6;
+        transition: background 0.2s ease;
+    }
+    
+    .stat-item:last-child {
+        border-right: none;
+    }
+    
+    .stat-item:hover {
+        background: #f8f9fa;
+    }
+    
+    .stat-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #6c757d;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+    }
+    
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #212529;
+    }
+    
+    .section-title-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .section-icon {
+        width: 3rem;
+        height: 3rem;
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        border-radius: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    
+    .section-title {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin: 0;
+    }
+    
+    .table-card {
+        border: none;
+        border-radius: 1.25rem;
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+    
+    .table thead {
+       background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+    }
+    
+    .table thead th {
+        color: white;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+        border: none;
+        padding: 1.25rem 1.5rem;
+    }
+    
+    .table tbody tr {
+        transition: background 0.2s ease;
+    }
+    
+    .table tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .table tbody td {
+        padding: 1.5rem;
+        vertical-align: middle;
+    }
+    
+    .date-primary {
+        font-weight: 700;
+        color: #212529;
+        display: block;
+    }
+    
+    .date-secondary {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    
+    .badge-connects {
+        font-size: 1.125rem;
+        font-weight: 800;
+        color: #28a745;
+    }
+    
+    .badge-amount {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #28a745;
+    }
+    
+    .badge-status {
+        padding: 0.5rem 1.25rem;
+        border-radius: 2rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .badge-completed {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .badge-pending {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .empty-state {
+        padding: 5rem 2rem;
+        text-align: center;
+    }
+    
+    .empty-icon {
+        font-size: 5rem;
+        opacity: 0.2;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Responsive */
+    @media (max-width: 991px) {
+        .stat-item {
+            border-right: none;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+    }
+    
+    @media (max-width: 767px) {
+        .page-header {
+            padding: 3rem 0 5rem;
+        }
+        
+        .page-title {
+            font-size: 2rem;
+        }
+        
+        .balance-amount {
+            font-size: 3rem;
+        }
+        
+        .balance-header {
+            padding: 2.5rem 1.5rem;
+        }
+        
+        .stat-value {
+            font-size: 1.75rem;
+        }
+        
+        .table thead th,
+        .table tbody td {
+            padding: 1rem 0.75rem;
+            font-size: 0.875rem;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h2 class="text-center">💳 My Connects <b>{{ connects }}</b> </h2>
-    
-{#    <div class="card p-4 shadow-sm">#}
-{#        <h4 class="text-primary">Available Connects: <b>{{ connects }}</b></h4>#}
-{#        <a href="{% url 'buy_connects' %}" class="btn btn-success mt-2">Buy More Connects</a>#}
-{#    </div>#}
-
-    <h3 class="mt-4">Transaction History</h3>
-    <table class="table table-bordered mt-3">
-        <thead class="table-dark">
-            <tr>
-                <th>Date</th>
-                <th>Connects Added</th>
-                <th>Amount Paid</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for transaction in transactions %}
-            <tr>
-                <td>{{ transaction.created_at|date:"M d, Y H:i" }}</td>
-                <td>{{ transaction.connects_added }}</td>
-                <td>${{ transaction.amount_paid }}</td>
-                <td>
-                    {% if transaction.is_completed %}
-                        ✅ Completed
-                    {% else %}
-                        ⏳ Pending
-                    {% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="4" class="text-center">No purchases yet</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- Page Header -->
+<div class="page-header">
+    <div class="container">
+        <div class="text-center">
+            <h1 class="page-title">My Connects</h1>
+        </div>
+    </div>
 </div>
-    <hr>
+
+<!-- Main Content -->
+<div class="container">
+    <!-- Balance Card -->
+    <div class="balance-card-wrapper">
+        <div class="card balance-card">
+            <div class="balance-header">
+                <div class="text-center">
+                    <div class="balance-label">Available Connects</div>
+                    <div class="balance-amount">{{ connects }}</div>
+                    <p class="text-muted mb-4">Ready to download GIS layers</p>
+                    <a href="{% url 'buy_connects' %}" class="btn btn-primary btn-buy-connects">
+                        Buy More Connects
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Stats Section -->
+            <div class="stats-section">
+                <div class="row g-0">
+                    <div class="col-lg-4 col-md-4">
+                        <div class="stat-item">
+                            <div class="stat-label">Total Transactions</div>
+                            <div class="stat-value">{{ transactions|length }}</div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-4">
+                        <div class="stat-item">
+                            <div class="stat-label">Total Spent</div>
+                            <div class="stat-value">${{ transactions|sum_by:'amount_paid'|default:"0" }}</div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-4">
+                        <div class="stat-item">
+                            <div class="stat-label">Connects Purchased</div>
+                            <div class="stat-value">{{ transactions|sum_by:'connects_added'|default:"0" }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction History -->
+    <div class="mb-5 pb-5">
+        <div class="section-title-wrapper">
+            <div class="section-icon">📊</div>
+            <h2 class="section-title">Transaction History</h2>
+        </div>
+
+        <div class="card table-card">
+            {% if transactions %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Connects Added</th>
+                            <th>Amount Paid</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>
+                                <span class="date-primary">{{ transaction.created_at|date:"M d, Y" }}</span>
+                                <span class="date-secondary">{{ transaction.created_at|date:"h:i A" }}</span>
+                            </td>
+                            <td>
+                                <span class="badge-connects">+{{ transaction.connects_added }}</span>
+                            </td>
+                            <td>
+                                <span class="badge-amount">${{ transaction.amount_paid }}</span>
+                            </td>
+                            <td>
+                                {% if transaction.is_completed %}
+                                    <span class="badge badge-completed">✓ Completed</span>
+                                {% else %}
+                                    <span class="badge badge-pending">⏳ Pending</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">📋</div>
+                <h4 class="text-muted">No Transactions Yet</h4>
+                <p class="text-muted mb-4">Your purchase history will appear here once you buy connects.</p>
+                <a href="{% url 'buy_connects' %}" class="btn btn-primary btn-buy-connects">
+                    Get Started
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
 {% endblock %}

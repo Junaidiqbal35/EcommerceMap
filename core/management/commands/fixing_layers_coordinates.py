@@ -77,7 +77,7 @@ class Command(BaseCommand):
                         f"{server.name} -> {zone_info['description']} (GDA2020: {zone_info['gda2020_wkid']})")
                 else:
                     invalid_servers.append(server)
-                    self.stdout.write(f"  ⚠️  {server.name} -> Coordinates outside Australia")
+                    self.stdout.write(f"{server.name} -> Coordinates outside Australia")
 
         # Validate layers
         invalid_layers = []
@@ -100,7 +100,7 @@ class Command(BaseCommand):
 
     def fix_invalid_extents(self, server_id=None):
         """Fix servers with invalid extents (global bounds)"""
-        self.stdout.write("🔧 Fixing invalid server extents...")
+        self.stdout.write("Fixing invalid server extents...")
 
         servers = Server.objects.filter(id=server_id) if server_id else Server.objects.all()
 
@@ -211,7 +211,7 @@ class Command(BaseCommand):
             self.stdout.write(f"Applied Australia-wide extent as fallback")
 
     def discover_missing_layers(self, server_id=None):
-        """Discover and create missing layers for servers without any"""
+        """Discover and create missing layers for servers"""
         self.stdout.write("🔍 Discovering missing layers for ALL infrastructure...")
 
         servers = Server.objects.filter(id=server_id) if server_id else Server.objects.all()
@@ -412,7 +412,7 @@ class Command(BaseCommand):
 
     def test_all_services(self):
         """Test accessibility of all ArcGIS services"""
-        self.stdout.write("🧪 Testing ALL infrastructure services...")
+        self.stdout.write("Testing ALL infrastructure services...")
 
         results = {'working': [], 'slow': [], 'failed': []}
 
@@ -524,8 +524,8 @@ class GDAZoneExportCommand(BaseCommand):
         with open('gda_zones_export.json', 'w') as f:
             json.dump(results, f, indent=2)
 
-        self.stdout.write("📍 GDA2020 Zone Analysis:")
+        self.stdout.write(" GDA2020 Zone Analysis:")
         for zone, info in zone_counts.items():
             self.stdout.write(f"  Zone {zone}: {info['count']} items - {info['description']}")
 
-        self.stdout.write(f"\n✅ Exported to gda_zones_export.json")
+        self.stdout.write(f"\n Exported to gda_zones_export.json")

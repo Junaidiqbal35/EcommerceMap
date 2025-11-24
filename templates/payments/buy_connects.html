@@ -1,31 +1,351 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% block extrahead %}
+<style>
+    /* Pricing Page Styles */
+    .pricing-header {
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        padding: 5rem 0;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .pricing-header::before {
+        content: '';
+        position: absolute;
+        top: -20%;
+        right: -10%;
+        width: 500px;
+        height: 500px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        filter: blur(80px);
+    }
+    
+    .pricing-title {
+        color: white;
+        font-size: 3rem;
+        font-weight: 900;
+        margin-bottom: 1rem;
+        position: relative;
+    }
+    
+    .pricing-subtitle {
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 1.25rem;
+        position: relative;
+    }
+    
+    .pricing-container {
+        margin-top: -3rem;
+        position: relative;
+        z-index: 10;
+    }
+    
+    .pricing-card {
+        border: none;
+        border-radius: 1.5rem;
+        box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+        overflow: hidden;
+        height: 100%;
+    }
+    
+    .pricing-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        transform: scaleX(0);
+        transition: transform 0.3s ease;
+    }
+    
+    .pricing-card:hover {
+        transform: translateY(-0.5rem);
+        box-shadow: 0 1rem 3rem rgba(102, 126, 234, 0.15);
+    }
+    
+    .pricing-card:hover::before {
+        transform: scaleX(1);
+    }
+    
+    .card-header-custom {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 2.5rem 2rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .package-icon {
+        width: 4rem;
+        height: 4rem;
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        border-radius: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        margin: 0 auto 1.5rem;
+        box-shadow: 0 0.5rem 1.5rem rgba(102, 126, 234, 0.25);
+    }
+    
+    .package-name {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #212529;
+        margin-bottom: 1rem;
+    }
+    
+    .connects-number {
+        font-size: 2.5rem;
+        font-weight: 900;
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .connects-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #6c757d;
+        font-weight: 600;
+    }
+    
+    .card-body-custom {
+        padding: 2rem;
+    }
+    
+    .price-display {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    .price-amount {
+        font-size: 3rem;
+        font-weight: 900;
+        color: #28a745;
+    }
+    
+    .price-currency {
+        font-size: 1.5rem;
+        vertical-align: super;
+    }
+    
+    .price-label {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+    }
+    
+    .features-list {
+        list-style: none;
+        padding: 0;
+        margin-bottom: 2rem;
+    }
+    
+    .features-list li {
+        padding: 0.75rem 0;
+        color: #495057;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .features-list li::before {
+        content: '✓';
+        width: 1.5rem;
+        height: 1.5rem;
+        background: #d4edda;
+        color: #155724;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        flex-shrink: 0;
+    }
+    
+    .btn-purchase {
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        border: none;
+        padding: 1rem 2rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-radius: 0.75rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 0.5rem 1.5rem rgba(102, 126, 234, 0.3);
+        width: 100%;
+    }
+    
+    .btn-purchase:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.75rem 2rem rgba(102, 126, 234, 0.4);
+    }
+    
+    .features-section {
+        padding: 4rem 0;
+        background: white;
+    }
+    
+    .features-title {
+        font-size: 2rem;
+        font-weight: 800;
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    
+    .feature-box {
+        text-align: center;
+        padding: 2rem;
+        background: #f8f9fa;
+        border-radius: 1rem;
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+    
+    .feature-box:hover {
+        background: white;
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.08);
+        transform: translateY(-0.25rem);
+    }
+    
+    .feature-icon {
+        font-size: 3rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .feature-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+    }
+    
+    .feature-text {
+        color: #6c757d;
+    }
+    
+    /* Responsive */
+    @media (max-width: 767px) {
+        .pricing-header {
+            padding: 4rem 0;
+        }
+        
+        .pricing-title {
+            font-size: 2rem;
+        }
+        
+        .pricing-subtitle {
+            font-size: 1.125rem;
+        }
+        
+        .package-icon {
+            width: 3rem;
+            height: 3rem;
+            font-size: 1.5rem;
+        }
+        
+        .price-amount {
+            font-size: 2.5rem;
+        }
+        
+        .connects-number {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h2 class="text-center mb-4">Buy Connects</h2>
-    <p class="text-center">Purchase connects to download maps.</p>
+<!-- Pricing Header -->
+<div class="pricing-header">
+    <div class="container">
+        <div class="text-center">
+            <h1 class="pricing-title">Choose Your Plan</h1>
+            <p class="pricing-subtitle">Select the perfect package for your GIS mapping needs</p>
+        </div>
+    </div>
+</div>
 
-    <div class="row">
-        <!-- Connect Package 1 -->
+<!-- Pricing Cards -->
+<div class="container pricing-container">
+    <div class="row g-4 mb-5">
         {% for package in packages %}
-            <div class="col-md-4">
-                <div class="card text-center shadow-lg">
-                    <div class="card-body">
-                        <h5 class="card-title">{{ package.name }}</h5>
-                        <p class="card-text">{{ package.connects }} Connects</p>
-                        <h4 class="text-success">${{ package.price }}</h4>
-                        <form action="{% url 'create_checkout_session' package.stripe_plan_id %}" method="POST">
-                            {% csrf_token %}
-                            <input type="hidden" name="package_id" value="1">
-                            <button type="submit" class="btn btn-dark">Buy Now</button>
-                        </form>
+        <div class="col-lg-4 col-md-6">
+            <div class="card pricing-card">
+                <div class="card-header-custom">
+                    <div class="text-center">
+                        <div class="package-icon">🗺️</div>
+                        <h3 class="package-name">{{ package.name }}</h3>
+                        <div class="connects-number">{{ package.connects }}</div>
+                        <div class="connects-label">Connects</div>
                     </div>
                 </div>
+                
+                <div class="card-body card-body-custom">
+                    <div class="price-display">
+                        <div class="price-amount">
+                            <span class="price-currency">$</span>{{ package.price }}
+                        </div>
+                        <div class="price-label">One-time payment</div>
+                    </div>
+                    
+                    <ul class="features-list">
+                        <li>Download {{ package.connects }} GIS layers</li>
+                        <li>DXF/CAD export included</li>
+                        <li>Never expires</li>
+                        <li>Instant activation</li>
+                    </ul>
+                    
+                    <form action="{% url 'create_checkout_session' package.stripe_plan_id %}" method="POST">
+                        {% csrf_token %}
+                        <input type="hidden" name="package_id" value="{{ package.id }}">
+                        <button type="submit" class="btn btn-primary btn-purchase">
+                            Purchase Now
+                        </button>
+                    </form>
+                </div>
             </div>
+        </div>
         {% endfor %}
     </div>
 </div>
-    <hr>
+
+<!-- Features Section -->
+<div class="features-section">
+    <div class="container">
+        <h2 class="features-title">Why Choose Our Connects?</h2>
+        
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="feature-box">
+                    <div class="feature-icon">⚡</div>
+                    <h3 class="feature-title">Instant Access</h3>
+                    <p class="feature-text">Connects are added immediately after purchase. Start downloading right away.</p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-box">
+                    <div class="feature-icon">🔒</div>
+                    <h3 class="feature-title">Secure Payment</h3>
+                    <p class="feature-text">All transactions are processed securely through Stripe payment gateway.</p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-box">
+                    <div class="feature-icon">♾️</div>
+                    <h3 class="feature-title">Never Expire</h3>
+                    <p class="feature-text">Your connects never expire. Use them whenever you need them.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

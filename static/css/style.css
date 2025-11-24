@@ -1,40 +1,49 @@
-@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600&display=swap');
-body{
-    font-family: 'Comfortaa', sans-serif;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
 .navbar {
-  background: linear-gradient(135deg, rgb(102, 126, 234) 0%, rgb(118, 75, 162) 100%) !important;
+    background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%) !important;
 }
 
 .navbar .nav-link {
-  color: #F0F3BD;
+    color: #f0fdfa;
+    font-weight: 500;
 }
+
 .navbar .navbar-brand {
-  color: #F0F3BD;
+    color: #f0fdfa;
+    font-weight: 600;
 }
+
 .navbar .nav-link:hover,
 .navbar .nav-link.active {
-  background-color: #1F4E7A;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 0.5rem;
 }
-
-
 
 .site-footer {
-  background-color: #264653;
-  color: #e9f1f8;
+    background-color: #1e293b;
+    color: #e2e8f0;
 }
+
 .site-footer a {
-  color: #e76f51;
-  text-decoration: none;
-  transition: color 0.3s ease;
+    color: #06b6d4;
+    text-decoration: none;
+    transition: color 0.3s ease;
 }
+
 .site-footer a:hover {
-  color: #2a9d8f;
+    color: #14b8a6;
 }
+
 .site-footer .bi {
-  color: #e76f51;
-  transition: transform 0.3s ease;
+    color: #06b6d4;
+    transition: transform 0.3s ease;
 }
+
 .site-footer .bi:hover {
-  transform: scale(1.1);
+    transform: scale(1.1);
 }

@@ -40,11 +40,11 @@ Install project with venv
   # for mac
    source venv/bin/activate
  
-   pip Install -r requirements.txt
+   pip install -r requirements.txt
  ```
 
   python3 manage.py runserver
-  python manage.py fixing_layers_austrialian --validate-coordinates
+  python manage.py fixing_layers_coordinates --validate-coordinates
 
 
 
@@ -80,7 +80,7 @@ sudo apt install gdal-bin libgdal-dev python3-gdal
 
 ## GDAL (Geospatial Data Abstraction Library) in Window
 ```
-    use this file inside the proect directory -> pip install GDAL -3.4.3-cp311-cp11-win_amd64.whl 
+    use this file inside the project directory -> pip install .\GDAL-3.4.3-cp311-cp311-win_amd64.whl 
     # changing in setting file line # 143 and # 144
     GDAL_LIBRARY_PATH = r'C:\Users\YourUserName\XYZDIRECTORY\EcommerceMap\.venv\Lib\site-packages\osgeo\gdal304.dll'
     GEOS_LIBRARY_PATH = r'C:\Users\YourUsername\XYZDIRECTORY\EcommerceMap\.venv\Lib\site-packages\osgeo\geos_c.dll' 

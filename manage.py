@@ -3,6 +3,8 @@
 import os
 import sys
 
+gdal_path = "E:\vscode_project\EcommerceMap\venv\Lib\site-packages\osgeo"
+os.environ['PATH'] = gdal_path + ";" + os.environ['PATH']
 
 def main():
     """Run administrative tasks."""

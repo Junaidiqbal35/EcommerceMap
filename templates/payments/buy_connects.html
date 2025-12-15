@@ -5,12 +5,16 @@
 <style>
     /* Pricing Page Styles */
     .pricing-header {
-        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        /* background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); */
+        background: url(https://mangomap.com/assets/images/gis-side-by-side-maps.png);
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-position: center;
         padding: 5rem 0;
         position: relative;
         overflow: hidden;
     }
-    
+
     .pricing-header::before {
         content: '';
         position: absolute;
@@ -22,27 +26,27 @@
         border-radius: 50%;
         filter: blur(80px);
     }
-    
+
     .pricing-title {
-        color: white;
+        color: black;
         font-size: 3rem;
         font-weight: 900;
         margin-bottom: 1rem;
         position: relative;
     }
-    
+
     .pricing-subtitle {
         color: rgba(255, 255, 255, 0.95);
         font-size: 1.25rem;
         position: relative;
     }
-    
+
     .pricing-container {
-        margin-top: -3rem;
+        margin-top: 3rem;
         position: relative;
         z-index: 10;
     }
-    
+
     .pricing-card {
         border: none;
         border-radius: 1.5rem;
@@ -51,7 +55,7 @@
         overflow: hidden;
         height: 100%;
     }
-    
+
     .pricing-card::before {
         content: '';
         position: absolute;
@@ -63,42 +67,43 @@
         transform: scaleX(0);
         transition: transform 0.3s ease;
     }
-    
+
     .pricing-card:hover {
         transform: translateY(-0.5rem);
         box-shadow: 0 1rem 3rem rgba(102, 126, 234, 0.15);
     }
-    
+
     .pricing-card:hover::before {
         transform: scaleX(1);
     }
-    
+
     .card-header-custom {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 2.5rem 2rem;
+        /* background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); */
+        padding: 1rem 2rem;
         border-bottom: 1px solid #dee2e6;
     }
-    
+
     .package-icon {
-        width: 4rem;
-        height: 4rem;
-        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        width: 6rem;
+        height: 6rem;
+        color: rgb(199, 199, 0);
+        /* background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); */
         border-radius: 1rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 2rem;
-        margin: 0 auto 1.5rem;
-        box-shadow: 0 0.5rem 1.5rem rgba(102, 126, 234, 0.25);
+        font-size: 3rem;
+        margin: 0 auto;
+        /* box-shadow: 0 0.5rem 1.5rem rgba(102, 126, 234, 0.25); */
     }
-    
+
     .package-name {
         font-size: 1.5rem;
         font-weight: 800;
         color: #212529;
         margin-bottom: 1rem;
     }
-    
+
     .connects-number {
         font-size: 2.5rem;
         font-weight: 900;
@@ -107,7 +112,7 @@
         -webkit-text-fill-color: transparent;
         background-clip: text;
     }
-    
+
     .connects-label {
         font-size: 0.75rem;
         text-transform: uppercase;
@@ -115,39 +120,39 @@
         color: #6c757d;
         font-weight: 600;
     }
-    
+
     .card-body-custom {
         padding: 2rem;
     }
-    
+
     .price-display {
         text-align: center;
         margin-bottom: 2rem;
     }
-    
+
     .price-amount {
         font-size: 3rem;
         font-weight: 900;
-        color: #28a745;
+        color: black;
     }
-    
+
     .price-currency {
         font-size: 1.5rem;
         vertical-align: super;
     }
-    
+
     .price-label {
         color: #6c757d;
         font-size: 0.875rem;
         margin-top: 0.5rem;
     }
-    
+
     .features-list {
         list-style: none;
         padding: 0;
         margin-bottom: 2rem;
     }
-    
+
     .features-list li {
         padding: 0.75rem 0;
         color: #495057;
@@ -155,7 +160,7 @@
         align-items: center;
         gap: 0.75rem;
     }
-    
+
     .features-list li::before {
         content: '✓';
         width: 1.5rem;
@@ -169,7 +174,7 @@
         font-weight: 900;
         flex-shrink: 0;
     }
-    
+
     .btn-purchase {
         background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
         border: none;
@@ -182,24 +187,24 @@
         box-shadow: 0 0.5rem 1.5rem rgba(102, 126, 234, 0.3);
         width: 100%;
     }
-    
+
     .btn-purchase:hover {
         transform: translateY(-2px);
         box-shadow: 0 0.75rem 2rem rgba(102, 126, 234, 0.4);
     }
-    
+
     .features-section {
         padding: 4rem 0;
         background: white;
     }
-    
+
     .features-title {
         font-size: 2rem;
         font-weight: 800;
         text-align: center;
         margin-bottom: 3rem;
     }
-    
+
     .feature-box {
         text-align: center;
         padding: 2rem;
@@ -208,52 +213,63 @@
         transition: all 0.3s ease;
         height: 100%;
     }
-    
+
     .feature-box:hover {
         background: white;
         box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.08);
         transform: translateY(-0.25rem);
     }
-    
+
     .feature-icon {
         font-size: 3rem;
         margin-bottom: 1.5rem;
     }
-    
+
     .feature-title {
         font-size: 1.25rem;
         font-weight: 700;
         margin-bottom: 0.75rem;
     }
-    
+
     .feature-text {
         color: #6c757d;
     }
-    
+    .bg-overlay {
+    background: #0d9488;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.50;
+    }
+
     /* Responsive */
     @media (max-width: 767px) {
         .pricing-header {
             padding: 4rem 0;
         }
-        
+
         .pricing-title {
             font-size: 2rem;
         }
-        
+
         .pricing-subtitle {
             font-size: 1.125rem;
         }
-        
+
         .package-icon {
             width: 3rem;
             height: 3rem;
             font-size: 1.5rem;
         }
-        
+
         .price-amount {
             font-size: 2.5rem;
         }
-        
+
         .connects-number {
             font-size: 2rem;
         }
@@ -264,10 +280,11 @@
 {% block content %}
 <!-- Pricing Header -->
 <div class="pricing-header">
+ <div class="bg-overlay"></div>
     <div class="container">
         <div class="text-center">
-            <h1 class="pricing-title">Choose Your Plan</h1>
-            <p class="pricing-subtitle">Select the perfect package for your GIS mapping needs</p>
+            <h1 data-aos="fade-up" data-aos-delay="300" class="pricing-title">CHOOSE YOUR PLAN</h1>
+            <p data-aos="fade-up" data-aos-delay="600" class="pricing-subtitle">Select the perfect package for your GIS mapping needs</p>
         </div>
     </div>
 </div>
@@ -280,13 +297,23 @@
             <div class="card pricing-card">
                 <div class="card-header-custom">
                     <div class="text-center">
-                        <div class="package-icon">🗺️</div>
+                        <div class="package-icon">
+                            {% if forloop.counter == 1 %}
+                            <i class="fa-solid fa-rocket"></i>
+                            {% elif forloop.counter == 2 %}
+                            <i class="fa-solid fa-gem"></i>
+                            {% elif forloop.counter == 3 %}
+                            <i class="fa-solid fa-crown"></i>
+                            {% else %}
+                            <i class="fa-solid fa-star"></i>
+                            {% endif %}
+                        </div>
                         <h3 class="package-name">{{ package.name }}</h3>
                         <div class="connects-number">{{ package.connects }}</div>
                         <div class="connects-label">Connects</div>
                     </div>
                 </div>
-                
+
                 <div class="card-body card-body-custom">
                     <div class="price-display">
                         <div class="price-amount">
@@ -294,14 +321,14 @@
                         </div>
                         <div class="price-label">One-time payment</div>
                     </div>
-                    
+
                     <ul class="features-list">
                         <li>Download {{ package.connects }} GIS layers</li>
                         <li>DXF/CAD export included</li>
                         <li>Never expires</li>
                         <li>Instant activation</li>
                     </ul>
-                    
+
                     <form action="{% url 'create_checkout_session' package.stripe_plan_id %}" method="POST">
                         {% csrf_token %}
                         <input type="hidden" name="package_id" value="{{ package.id }}">
@@ -319,26 +346,27 @@
 <!-- Features Section -->
 <div class="features-section">
     <div class="container">
-        <h2 class="features-title">Why Choose Our Connects?</h2>
-        
+        <h2 data-aos="fade-up" data-aos-delay="300" class="features-title">Why Choose Our Connects?</h2>
+
         <div class="row g-4">
-            <div class="col-md-4">
+            <div data-aos="fade-right" data-aos-delay="300" class="col-md-4">
                 <div class="feature-box">
                     <div class="feature-icon">⚡</div>
                     <h3 class="feature-title">Instant Access</h3>
-                    <p class="feature-text">Connects are added immediately after purchase. Start downloading right away.</p>
+                    <p class="feature-text">Connects are added immediately after purchase. Start downloading right away.
+                    </p>
                 </div>
             </div>
-            
-            <div class="col-md-4">
+
+            <div data-aos="fade-right" data-aos-delay="600" class="col-md-4">
                 <div class="feature-box">
                     <div class="feature-icon">🔒</div>
                     <h3 class="feature-title">Secure Payment</h3>
                     <p class="feature-text">All transactions are processed securely through Stripe payment gateway.</p>
                 </div>
             </div>
-            
-            <div class="col-md-4">
+
+            <div data-aos="fade-right" data-aos-delay="900" class="col-md-4">
                 <div class="feature-box">
                     <div class="feature-icon">♾️</div>
                     <h3 class="feature-title">Never Expire</h3>

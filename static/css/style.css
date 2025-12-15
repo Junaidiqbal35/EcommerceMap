@@ -9,7 +9,7 @@ body {
 }
 
 .navbar .nav-link {
-    color: #f0fdfa;
+    color: black;
     font-weight: 500;
 }
 
@@ -30,7 +30,7 @@ body {
 }
 
 .site-footer a {
-    color: #06b6d4;
+    color: #0d9488;
     text-decoration: none;
     transition: color 0.3s ease;
 }
@@ -40,10 +40,11 @@ body {
 }
 
 .site-footer .bi {
-    color: #06b6d4;
+    color: #0d9488;
     transition: transform 0.3s ease;
 }
 
 .site-footer .bi:hover {
     transform: scale(1.1);
+    color: #14b8a6;
 }

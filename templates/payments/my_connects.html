@@ -6,7 +6,11 @@
 <style>
     /* Custom styles that work with Bootstrap */
     .page-header {
-        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+        /* background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); */
+        background: url(https://marvel-b1-cdn.bc0a.com/f00000000100045/www.elmhurst.edu/wp-content/uploads/2020/04/gis-mapping-tools.jpg);
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-position: center;
         padding: 4rem 0 6rem;
         margin-bottom: 0;
         position: relative;
@@ -23,7 +27,7 @@
     }
     
     .page-title {
-        color: white;
+        color: black;
         font-size: 2.5rem;
         font-weight: 800;
         margin: 0;
@@ -140,6 +144,9 @@
         font-weight: 800;
         margin: 0;
     }
+    .table>:not(caption)>*>*{
+        background: none;
+    }
     
     .table-card {
         border: none;
@@ -153,7 +160,7 @@
     }
     
     .table thead th {
-        color: white;
+        color: black;
         font-weight: 700;
         text-transform: uppercase;
         font-size: 0.75rem;
@@ -189,13 +196,13 @@
     .badge-connects {
         font-size: 1.125rem;
         font-weight: 800;
-        color: #28a745;
+        color: #0d9488;
     }
     
     .badge-amount {
         font-size: 1.25rem;
         font-weight: 800;
-        color: #28a745;
+        color: #0d9488;
     }
     
     .badge-status {
@@ -209,7 +216,7 @@
     
     .badge-completed {
         background: #d4edda;
-        color: #155724;
+        color: #0d9488;
     }
     
     .badge-pending {
@@ -227,7 +234,17 @@
         opacity: 0.2;
         margin-bottom: 1.5rem;
     }
-    
+    .bg-overlay {
+    background: #0d9488;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.50;
+    }
     /* Responsive */
     @media (max-width: 991px) {
         .stat-item {
@@ -273,9 +290,10 @@
 {% block content %}
 <!-- Page Header -->
 <div class="page-header">
+    <div class="bg-overlay"></div>
     <div class="container">
         <div class="text-center">
-            <h1 class="page-title">My Connects</h1>
+            <h1 data-aos="fade-up" data-aos-delay="300" class="page-title">MY CONNECTS</h1>
         </div>
     </div>
 </div>
@@ -300,19 +318,19 @@
             <div class="stats-section">
                 <div class="row g-0">
                     <div class="col-lg-4 col-md-4">
-                        <div class="stat-item">
+                        <div data-aos="fade-up" data-aos-delay="600" class="stat-item">
                             <div class="stat-label">Total Transactions</div>
                             <div class="stat-value">{{ transactions|length }}</div>
                         </div>
                     </div>
                     <div class="col-lg-4 col-md-4">
-                        <div class="stat-item">
+                        <div data-aos="fade-up" data-aos-delay="600" class="stat-item">
                             <div class="stat-label">Total Spent</div>
                             <div class="stat-value">${{ transactions|sum_by:'amount_paid'|default:"0" }}</div>
                         </div>
                     </div>
                     <div class="col-lg-4 col-md-4">
-                        <div class="stat-item">
+                        <div data-aos="fade-up" data-aos-delay="600"  class="stat-item">
                             <div class="stat-label">Connects Purchased</div>
                             <div class="stat-value">{{ transactions|sum_by:'connects_added'|default:"0" }}</div>
                         </div>
@@ -326,7 +344,7 @@
     <div class="mb-5 pb-5">
         <div class="section-title-wrapper">
             <div class="section-icon">📊</div>
-            <h2 class="section-title">Transaction History</h2>
+            <h2 data-aos="fade-right" data-aos-delay="300" class="section-title">Connects History</h2>
         </div>
 
         <div class="card table-card">
@@ -335,13 +353,13 @@
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
-                            <th>Date & Time</th>
-                            <th>Connects Added</th>
-                            <th>Amount Paid</th>
-                            <th>Status</th>
+                            <th data-aos="fade-right" data-aos-delay="300">Date & Time</th>
+                            <th data-aos="fade-right" data-aos-delay="600">Connects Added</th>
+                            <th data-aos="fade-right" data-aos-delay="900">Amount Paid</th>
+                            <th data-aos="fade-right" data-aos-delay="1200">Status</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody data-aos="fade-right" data-aos-delay="1500">
                         {% for transaction in transactions %}
                         <tr>
                             <td>

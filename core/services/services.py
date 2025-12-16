@@ -7,6 +7,10 @@ import time
 from django.core.cache import cache
 from django.conf import settings
 import logging
+from ..models import Layer
+# core/views.py
+from core.services.layer_features import fetch_layer_features_with_attributes
+
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +130,6 @@ class ServiceHealthManager:
     @classmethod
     def get_service_status_summary(cls):
         """Get a summary of all service statuses"""
-        from .models import Layer
 
         servers = {}
         layers = Layer.objects.select_related('server').filter(server__isnull=False)
@@ -288,7 +291,7 @@ class RobustArcGISClient:
 
         # ... (implement similar to fetch_layer_features_with_attributes but with robust error handling)
         # For brevity, using the existing function structure
-        from .views import fetch_layer_features_with_attributes
+        
         return fetch_layer_features_with_attributes(layer, minx, miny, maxx, maxy, limit, out_sr)
 
 
@@ -296,7 +299,6 @@ class RobustArcGISClient:
 
 def test_all_services():
     """Test all services and return results"""
-    from .models import Layer
 
     results = {}
     layers = Layer.objects.select_related('server').filter(server__isnull=False)

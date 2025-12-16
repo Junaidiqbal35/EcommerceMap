@@ -19,11 +19,12 @@ body {
   align-items: center;
   justify-content: center;
   padding: 4rem 0;
-  background-color: #f0fdfa;
+  /* background-color: #f0fdfa;
   background-image:
     linear-gradient(to right, var(--bg-grid) 1px, transparent 1px),
     linear-gradient(to bottom, var(--bg-grid) 1px, transparent 1px);
-  background-size: 25px 25px;
+  background-size: 25px 25px; */
+  background: url(https://cdn.prod.website-files.com/669f026de3d3109d99006b7f/66a3495c9b3f5eec3c2735f2_What%20is%20GIS.jpg);
 }
 
 .auth-card {
@@ -31,11 +32,12 @@ body {
   border-radius: 1rem;
   background: var(--card-bg);
   box-shadow: 0 10px 30px rgba(13, 148, 136, 0.1);
+  padding: 0.5rem 1rem;
 }
 
 .auth-card .form-control {
   border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 1rem;
   border: 2px solid #e5e7eb;
   transition: all 0.3s ease;
 }
@@ -108,6 +110,17 @@ body {
   transform: scaleX(1);
   transform-origin: bottom left;
 }
+.bg-overlay {
+    background: #0d9488;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.50;
+    }
 
 @media (max-width: 576px) {
   .auth-section {

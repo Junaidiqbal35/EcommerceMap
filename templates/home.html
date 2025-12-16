@@ -20,6 +20,57 @@
 <!-- Leaflet Geocoder -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css">
 <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+<!-- Tab Styles (inline to keep simple) -->
+<style>
+    .panel-tabs {
+        display: flex;
+        background: linear-gradient(135deg, #f0fdfa, #ccfbf1);
+        border-bottom: 2px solid #e2e8f0;
+    }
+    
+    .panel-tab {
+        flex: 1;
+        padding: 12px 8px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: #64748b;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px;
+    }
+    
+    .panel-tab:hover {
+        color: #0d9488;
+        background: rgba(13, 148, 136, 0.1);
+    }
+    
+    .panel-tab.active {
+        color: #0d9488;
+        border-bottom-color: #0d9488;
+        background: white;
+    }
+    
+    .tab-badge {
+        background: #0d9488;
+        color: white;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        min-width: 18px;
+    }
+    
+    .tab-badge:empty {
+        display: none;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -29,20 +80,9 @@
      data-layers-url="{% url 'layer_list' %}"
      data-nearby-url="{% url 'nearby_layers' %}"
      data-preview-url="{% url 'layer_preview_features' %}"
-{#     data-connects-url="{% url 'user_connects' %}"#}
+     data-downloads-url="{% url 'user_downloads' %}"
      data-csrf-token="{{ csrf_token }}">
 </div>
-
-<!-- User Connects Badge -->
-{#<div class="connects-badge" id="connectsBadge">#}
-{#    <span class="connects-icon">💰</span>#}
-{#    <span class="connects-count" #}
-{#          hx-get="{% url 'user_connects' %}" #}
-{#          hx-trigger="load, connectsUpdated from:body"#}
-{#          hx-swap="innerHTML">#}
-{#        Loading...#}
-{#    </span>#}
-{#</div>#}
 
 <!-- Basemap Control -->
 <div class="basemap-control" id="basemapControl" style="margin-top: 50px;">
@@ -65,8 +105,8 @@
     </div>
 </div>
 
-<!-- Layer Panel -->
-<div id="layerPanel" x-data="{ minimized: false }">
+<!-- Layer Panel with Tabs -->
+<div id="layerPanel" x-data="{ minimized: false, activeTab: 'layers' }">
     <div class="panel-header">
         <h4>
             <span>📦</span>
@@ -86,49 +126,81 @@
     </div>
     
     <div class="panel-content" x-show="!minimized" x-transition>
-        <!-- Search Box -->
-        <div class="search-box">
-            <input type="text" 
-                   id="layerSearch"
-                   placeholder="🔍 Search layers..." 
-                   name="search"
-                   hx-get="{% url 'layer_list' %}"
-                   hx-trigger="keyup changed delay:500ms"
-                   hx-target="#layerListContent"
-                   hx-indicator="#layerLoadingIndicator"
-                   class="search-input">
-        </div>
-        
-        <!-- Filter Buttons -->
-        <div class="filter-buttons">
-            <button class="filter-btn active"
-                    onclick="MapController.filterLayers('all', this)">
-                All
+        <!-- Tab Navigation -->
+        <div class="panel-tabs">
+            <button class="panel-tab" 
+                    :class="{ 'active': activeTab === 'layers' }"
+                    @click="activeTab = 'layers'">
+                📦 All Layers
             </button>
-            <button class="filter-btn"
-                    onclick="MapController.filterLayers('water', this)">
-                💧 Water
-            </button>
-            <button class="filter-btn"
-                    onclick="MapController.filterLayers('electric', this)">
-                ⚡ Electric
-            </button>
-            <button class="filter-btn"
-                    onclick="MapController.filterLayers('road', this)">
-                🛣️ Roads
+            <button class="panel-tab" 
+                    :class="{ 'active': activeTab === 'downloads' }"
+                    @click="activeTab = 'downloads'">
+                📥 My Downloads
+                <span class="tab-badge" id="downloadsBadge"></span>
             </button>
         </div>
-        
-        <!-- Layer List Container -->
-        <div id="layerList">
-            <div id="layerLoadingIndicator" class="htmx-indicator">
+
+        <!-- All Layers Tab -->
+        <div x-show="activeTab === 'layers'" x-transition>
+            <!-- Search Box -->
+            <div class="search-box">
+                <input type="text" 
+                       id="layerSearch"
+                       placeholder="🔍 Search layers..." 
+                       name="search"
+                       hx-get="{% url 'layer_list' %}"
+                       hx-trigger="keyup changed delay:500ms"
+                       hx-target="#layerListContent"
+                       hx-indicator="#layerLoadingIndicator"
+                       class="search-input">
+            </div>
+            
+            <!-- Filter Buttons -->
+            <div class="filter-buttons">
+                <button class="filter-btn active"
+                        onclick="MapController.filterLayers('all', this)">
+                    All
+                </button>
+                <button class="filter-btn"
+                        onclick="MapController.filterLayers('water', this)">
+                    💧 Water
+                </button>
+                <button class="filter-btn"
+                        onclick="MapController.filterLayers('electric', this)">
+                    ⚡ Electric
+                </button>
+                <button class="filter-btn"
+                        onclick="MapController.filterLayers('road', this)">
+                    🛣️ Roads
+                </button>
+            </div>
+            
+            <!-- Layer List Container -->
+            <div id="layerList p-5">
+                <div id="layerLoadingIndicator" class="htmx-indicator">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div id="layerListContent" 
+                     hx-get="{% url 'layer_list' %}" 
+                     hx-trigger="load"
+                     hx-ext="loading-states">
+                    <!-- Layers will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- My Downloads Tab -->
+        <div x-show="activeTab === 'downloads'" x-transition style="padding: 16px;">
+            <div id="downloadsLoadingIndicator" class="htmx-indicator">
                 <div class="loading-spinner"></div>
             </div>
-            <div id="layerListContent" 
-                 hx-get="{% url 'layer_list' %}" 
-                 hx-trigger="load"
+            <div id="downloadsContent" 
+                 hx-get="{% url 'user_downloads' %}" 
+                 hx-trigger="revealed, downloadsUpdated from:body"
+                 hx-indicator="#downloadsLoadingIndicator"
                  hx-ext="loading-states">
-                <!-- Layers will be loaded here -->
+                <!-- Downloads will be loaded here -->
             </div>
         </div>
     </div>
@@ -197,7 +269,7 @@
             layersUrl: mapEl.dataset.layersUrl,
             nearbyUrl: mapEl.dataset.nearbyUrl,
             previewUrl: mapEl.dataset.previewUrl,
-            connectsUrl: mapEl.dataset.connectsUrl,
+            downloadsUrl: mapEl.dataset.downloadsUrl,
             csrfToken: mapEl.dataset.csrfToken
         };
         
@@ -207,11 +279,21 @@
         // Listen for HTMX events
         document.body.addEventListener('htmx:afterSwap', function(evt) {
             MapController.handleHtmxAfterSwap(evt);
+            
+            // Update downloads badge
+            if (evt.detail.target.id === 'downloadsContent') {
+                const countEl = document.querySelector('#downloadsContent [data-count]');
+                const badge = document.getElementById('downloadsBadge');
+                if (countEl && badge) {
+                    const count = countEl.dataset.count;
+                    badge.textContent = count > 0 ? count : '';
+                }
+            }
         });
     });
 </script>
 
-<!-- Expose toggleLayer and other functions for onclick handlers in partials -->
+<!-- Expose functions for onclick handlers in partials -->
 <script>
     // Bridge functions for onclick handlers in HTMX partials
     window.toggleLayer = function(layerId, checkbox) {

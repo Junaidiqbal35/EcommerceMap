@@ -1,3 +1,5 @@
+from core.models import Layer, DownloadRecord, UserLayerPreference
+from core.services.preference_service import get_preference_service
 from django.conf import settings
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse
@@ -6,7 +8,9 @@ from django.views.decorators.http import require_GET, require_POST
 
 from django.template.response import TemplateResponse
 
-from django.db.models import Q
+from django.db.models import Q, Count
+from django.utils import timezone
+from datetime import timedelta
 from typing import List, Dict, Any, Optional
 
 from requests.adapters import HTTPAdapter
@@ -950,6 +954,22 @@ def export_dxf_multi(request):
 
         logger.info(f"Successfully exported {export_summary['total_features']} features "
                     f"from {export_summary['successful_layers']} layers for {user.username}")
+        # After successful download, record it
+        service = get_preference_service(request.user)
+        for layer in layers:
+            service.record_download(
+                layer=layer,
+                latitude=center_lat,
+                longitude=center_lng,
+                feature_count=len(features),
+                file_format='dxf',
+                bbox={
+                    'min_x': minx,
+                    'min_y': miny,
+                    'max_x': maxx,
+                    'max_y': maxy
+                }
+            )
 
         return response
 
@@ -2618,3 +2638,138 @@ def draw_feature_to_dxf(msp, geom, attributes, layer):
 
     except Exception as e:
         logger.error(f"Error drawing {geom_type}: {e}")
+
+@login_required
+@require_GET
+def user_downloads(request):
+    """
+    HTMX partial: Get user's downloaded layers.
+    Shows layers ordered by download count.
+    """
+    search = request.GET.get('search', '').strip()
+    filter_type = request.GET.get('filter', 'all')
+    
+    # Get user's preferences (downloaded layers)
+    preferences = UserLayerPreference.objects.filter(
+        user=request.user,
+        is_hidden=False,
+        layer__status='active'
+    ).select_related(
+        'layer', 'layer__server'
+    ).order_by('-download_count', '-last_downloaded')
+    
+    # Apply search
+    if search:
+        preferences = preferences.filter(
+            Q(layer__name__icontains=search) |
+            Q(layer__server__name__icontains=search) |
+            Q(custom_name__icontains=search)
+        )
+    
+    # Apply filter
+    if filter_type == 'favorites':
+        preferences = preferences.filter(is_favorite=True)
+    elif filter_type == 'recent':
+        week_ago = timezone.now() - timedelta(days=7)
+        preferences = preferences.filter(last_downloaded__gte=week_ago)
+    
+    preferences = preferences[:30]
+    
+    # Build list with last download info
+    downloads_list = []
+    for pref in preferences:
+        last_download = DownloadRecord.objects.filter(
+            user=request.user,
+            layer=pref.layer
+        ).order_by('-downloaded_at').first()
+        
+        downloads_list.append({
+            'pref': pref,
+            'layer': pref.layer,
+            'last_download': last_download,
+        })
+    
+    return render(request, 'partials/user_downloads.html', {
+        'downloads': downloads_list,
+        'total_count': len(downloads_list),
+        'search': search,
+        'filter_type': filter_type,
+    })
+
+
+@login_required
+@require_POST
+def toggle_favorite(request, layer_id):
+    """Toggle favorite status for a layer"""
+    layer = get_object_or_404(Layer, pk=layer_id)
+    service = get_preference_service(request.user)
+    
+    is_favorite = service.toggle_favorite(layer)
+    
+    if request.headers.get('HX-Request'):
+        # Return updated button for HTMX
+        icon = '⭐' if is_favorite else '☆'
+        html = f'''
+        <button class="btn-icon {'active' if is_favorite else ''}" 
+                title="{'Remove from favorites' if is_favorite else 'Add to favorites'}"
+                hx-post="/api/layers/{layer_id}/favorite/"
+                hx-swap="outerHTML">
+            {icon}
+        </button>
+        '''
+        return HttpResponse(html)
+    
+    return JsonResponse({'is_favorite': is_favorite})
+
+
+@login_required
+@require_POST
+def hide_from_downloads(request, layer_id):
+    """Hide a layer from download history"""
+    layer = get_object_or_404(Layer, pk=layer_id)
+    service = get_preference_service(request.user)
+    
+    service.hide_layer(layer)
+    
+    if request.headers.get('HX-Request'):
+        response = HttpResponse('')
+        response['HX-Trigger'] = 'downloadsUpdated'
+        return response
+    
+    return JsonResponse({'hidden': True})
+
+
+@login_required
+@require_GET
+def download_stats(request):
+    """Get user's download statistics"""
+    service = get_preference_service(request.user)
+    stats = service.get_usage_stats()
+    
+    return JsonResponse(stats)
+
+
+@login_required
+@require_GET
+def layer_suggestions(request):
+    """Get layer suggestions for the user"""
+    layer_id = request.GET.get('layer_id')
+    current_layer = None
+    
+    if layer_id:
+        current_layer = Layer.objects.filter(pk=layer_id).first()
+    
+    service = get_preference_service(request.user)
+    suggestions = service.get_layer_suggestions(current_layer, limit=5)
+    
+    data = [
+        {
+            'id': layer.layer_id,
+            'name': layer.name,
+            'type': layer.type,
+            'server': layer.server.name if layer.server else None,
+        }
+        for layer in suggestions
+    ]
+    
+    return JsonResponse({'suggestions': data})

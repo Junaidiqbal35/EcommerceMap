@@ -1,0 +1,237 @@
+<!-- templates/partials/user_downloads.html -->
+<!-- HTMX partial: User's downloaded layers list -->
+
+<!-- Pass count to JS for badge -->
+<span data-count="{{ total_count }}" style="display:none;"></span>
+
+{% if downloads %}
+    <!-- Filter buttons for downloads -->
+    <div class="downloads-filters" style="margin-bottom: 12px;">
+        <button class="filter-btn {% if filter_type == 'all' %}active{% endif %}"
+                hx-get="{% url 'user_downloads' %}?filter=all"
+                hx-target="#downloadsContent"
+                hx-swap="innerHTML">
+            All
+        </button>
+        <button class="filter-btn {% if filter_type == 'favorites' %}active{% endif %}"
+                hx-get="{% url 'user_downloads' %}?filter=favorites"
+                hx-target="#downloadsContent"
+                hx-swap="innerHTML">
+            ⭐ Favorites
+        </button>
+        <button class="filter-btn {% if filter_type == 'recent' %}active{% endif %}"
+                hx-get="{% url 'user_downloads' %}?filter=recent"
+                hx-target="#downloadsContent"
+                hx-swap="innerHTML">
+            🕐 Recent
+        </button>
+    </div>
+
+    <!-- Downloads list -->
+    <div class="downloads-list">
+        {% for item in downloads %}
+            <div class="download-layer-item" id="download-{{ item.layer.layer_id }}">
+                <!-- Checkbox -->
+                <input type="checkbox" 
+                       class="layer-checkbox"
+                       value="{{ item.layer.layer_id }}"
+                       onchange="toggleLayer({{ item.layer.layer_id }}, this)">
+                
+                <!-- Layer info -->
+                <div class="layer-info">
+                    <div class="layer-name" title="{{ item.layer.name }}">
+                        {% if item.layer.type == 'point' %}📍
+                        {% elif item.layer.type == 'polyline' %}〰️
+                        {% elif item.layer.type == 'polygon' %}⬡
+                        {% else %}📦
+                        {% endif %}
+                        {{ item.pref.custom_name|default:item.layer.name|truncatechars:28 }}
+                    </div>
+                    <div class="layer-meta">
+                        <span class="server-name">{{ item.layer.server.name }}</span>
+                        <span class="download-count">📥 {{ item.pref.download_count }}x</span>
+                        {% if item.pref.last_downloaded %}
+                            <span class="last-download">{{ item.pref.last_downloaded|timesince }} ago</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Actions -->
+                <div class="layer-actions">
+                    <!-- Favorite toggle -->
+                    <button class="btn-icon {% if item.pref.is_favorite %}active{% endif %}" 
+                            title="{% if item.pref.is_favorite %}Remove from favorites{% else %}Add to favorites{% endif %}"
+                            hx-post="{% url 'toggle_favorite' item.layer.layer_id %}"
+                            hx-swap="outerHTML">
+                        {% if item.pref.is_favorite %}⭐{% else %}☆{% endif %}
+                    </button>
+                    
+                    <!-- Zoom to layer -->
+                    <button class="btn-icon" 
+                            title="Zoom to layer"
+                            onclick="zoomToLayer({{ item.layer.layer_id }}, {{ item.layer.offsetY|default:'0' }}, {{ item.layer.offsetX|default:'0' }})">
+                        🔍
+                    </button>
+                    
+                    <!-- Hide from list -->
+                    <button class="btn-icon btn-remove" 
+                            title="Remove from history"
+                            hx-post="{% url 'hide_from_downloads' item.layer.layer_id %}"
+                            hx-target="#download-{{ item.layer.layer_id }}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Remove this layer from your download history?">
+                        🗑️
+                    </button>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+{% else %}
+    <!-- Empty state -->
+    <div class="downloads-empty">
+        <div class="icon">
+            {% if filter_type == 'favorites' %}
+                ⭐
+            {% elif filter_type == 'recent' %}
+                🕐
+            {% else %}
+                📥
+            {% endif %}
+        </div>
+        <p>
+            {% if search %}
+                No layers found for "{{ search }}"
+            {% elif filter_type == 'favorites' %}
+                No favorite layers yet
+            {% elif filter_type == 'recent' %}
+                No downloads in the last 7 days
+            {% else %}
+                No downloaded layers yet
+            {% endif %}
+        </p>
+        {% if filter_type != 'all' %}
+            <button class="btn-secondary" 
+                    hx-get="{% url 'user_downloads' %}?filter=all"
+                    hx-target="#downloadsContent"
+                    hx-swap="innerHTML">
+                View All
+            </button>
+        {% else %}
+            <p style="font-size: 12px; margin-top: 8px; color: var(--text-secondary);">
+                Download some layers and they'll appear here
+            </p>
+        {% endif %}
+    </div>
+{% endif %}
+
+<style>
+    .downloads-filters {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .downloads-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: calc(100vh - 320px);
+        overflow-y: auto;
+    }
+    
+    .download-layer-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+        background: white;
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary-color);
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+    
+    .download-layer-item:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateX(4px);
+    }
+    
+    .layer-info {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .layer-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .layer-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 11px;
+        color: var(--text-secondary);
+    }
+    
+    .download-count {
+        background: #f0fdfa;
+        color: var(--primary-color);
+        padding: 2px 6px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    
+    .layer-actions {
+        display: flex;
+        gap: 4px;
+    }
+    
+    .btn-icon {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--border-color);
+        background: white;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+    
+    .btn-icon:hover {
+        background: var(--primary-color);
+        border-color: var(--primary-color);
+        color: white;
+        transform: scale(1.1);
+    }
+    
+    .btn-icon.active {
+        color: #f59e0b;
+    }
+    
+    .btn-remove:hover {
+        background: #ef4444;
+        border-color: #ef4444;
+    }
+    
+    .downloads-empty {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--text-secondary);
+    }
+    
+    .downloads-empty .icon {
+        font-size: 48px;
+        opacity: 0.3;
+        margin-bottom: 12px;
+    }
+</style>

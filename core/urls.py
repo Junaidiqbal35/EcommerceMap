@@ -2,6 +2,12 @@
 
 from django.urls import path
 from . import views
+from core.views import (
+    user_downloads,
+    toggle_favorite,
+    hide_from_downloads,
+    download_stats,
+)
 
 urlpatterns = [
     # Main page
@@ -22,5 +28,10 @@ urlpatterns = [
 
     # Utility
     path('check-connects/', views.check_connects, name='check_connects'),
+
+    path('downloads/', user_downloads, name='user_downloads'),
+    path('api/layers/<int:layer_id>/favorite/', toggle_favorite, name='toggle_favorite'),
+    path('api/layers/<int:layer_id>/hide/', hide_from_downloads, name='hide_from_downloads'),
+    path('api/user/stats/', download_stats, name='download_stats'),
 
 ]

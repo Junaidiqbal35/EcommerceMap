@@ -1,5 +1,89 @@
 {% load static %}
+{% block extrahead %}
+<style>
+    .layer-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #fff;
+}
 
+/* Left section (checkbox + text) */
+.layer-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0; /* VERY IMPORTANT */
+}
+
+/* Label content */
+.layer-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.layer-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* Prevent text from pushing buttons */
+.layer-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    font-weight: 600;
+}
+
+/* Meta pills */
+.layer-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Action buttons */
+.layer-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* Buttons uniform size */
+.layer-actions button {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    cursor: pointer;
+}
+@media (max-width: 640px) {
+    .layer-item {
+        grid-template-columns: 1fr;
+    }
+
+    .layer-actions {
+        justify-content: flex-end;
+        margin-top: 8px;
+    }
+}
+
+</style>
+{% endblock %}
+
+{% block content %}
 {% if not layers %}
 <div class="empty-state">
     <div class="empty-icon">📦</div>
@@ -15,94 +99,86 @@
             <span class="server-name">{{ server }}</span>
             <span class="server-count">({{ server_layers|length }})</span>
         </div>
-        
+
         <div class="server-layers" x-show="expanded" x-transition>
             {% for layer in server_layers %}
             <div class="layer-item" data-layer-id="{{ layer.layer_id }}">
-                <input type="checkbox" 
-                       id="layer-{{ layer.layer_id }}"
-                       class="layer-checkbox"
-                       onchange="toggleLayer({{ layer.layer_id }}, this)">
-                
-                <label for="layer-{{ layer.layer_id }}" class="layer-label">
-                    <div class="layer-main">
-                        <span class="layer-icon">
-                            {% if 'water' in layer.name|lower %}💧
-                            {% elif 'sewer' in layer.name|lower %}🚰
-                            {% elif 'electric' in layer.name|lower %}⚡
-                            {% elif 'road' in layer.name|lower %}🛣️
-                            {% elif 'gas' in layer.name|lower %}🔥
-                            {% elif 'telecom' in layer.name|lower %}📡
-                            {% else %}📍{% endif %}
-                        </span>
-                        <span class="layer-name" title="{{ layer.name }}">{{ layer.name|truncatechars:30 }}</span>
-                    </div>
-                    <div class="layer-meta">
-                        <span class="layer-type">{{ layer.type }}</span>
-                        <span class="feature-count" id="layer-status-{{ layer.layer_id }}"></span>
-                        {% if not layer.geometry and not layer.offsetX and not layer.offsetY %}
-                        <span class="no-geometry" title="No location data available">📍❌</span>
-                        {% endif %}
-                    </div>
-                </label>
-                
+                <div class="layer-left">
+                    <input type="checkbox" id="layer-{{ layer.layer_id }}" class="layer-checkbox"
+                        onchange="toggleLayer({{ layer.layer_id }}, this)">
+
+                    <label for="layer-{{ layer.layer_id }}" class="layer-label">
+                        <div class="layer-main">
+                            <span class="layer-icon">
+                                {% if 'water' in layer.name|lower %}💧
+                                {% elif 'sewer' in layer.name|lower %}🚰
+                                {% elif 'electric' in layer.name|lower %}⚡
+                                {% elif 'road' in layer.name|lower %}🛣️
+                                {% elif 'gas' in layer.name|lower %}🔥
+                                {% elif 'telecom' in layer.name|lower %}📡
+                                {% else %}📍{% endif %}
+                            </span>
+                            <span class="layer-name" title="{{ layer.name }}">
+                                {{ layer.name }}
+                            </span>
+                        </div>
+
+                        <div class="layer-meta">
+                            <span class="layer-type">{{ layer.type }}</span>
+                            <span class="feature-count" id="layer-status-{{ layer.layer_id }}"></span>
+                        </div>
+                    </label>
+                </div>
+
                 <div class="layer-actions">
                     <!-- Enhanced zoom button logic -->
                     {% if layer.geometry %}
-                        {% if layer.geometry.geom_type == 'Point' %}
-                            <button class="btn-zoom" 
-                                    onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.y }}, {{ layer.geometry.x }})"
-                                    title="Zoom to layer location">
-                                🎯
-                            </button>
-                        {% else %}
-                            <button class="btn-zoom" 
-                                    onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.centroid.y }}, {{ layer.geometry.centroid.x }})"
-                                    title="Zoom to layer center">
-                                🎯
-                            </button>
-                        {% endif %}
-                    {% elif layer.offsetX != 0 or layer.offsetY != 0 %}
-                        <!-- Handle offset coordinates -->
-                        <button class="btn-zoom" 
-                                onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.offsetY }}, {{ layer.offsetX }})"
-                                title="Zoom to layer offset location">
-                                🎯
-                        </button>
-                    {% elif layer.server.extent_min_x and layer.server.extent_max_x %}
-                        <!-- Fallback to server extent center -->
-                        <button class="btn-zoom" 
-                                onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.server.extent_min_y|add:layer.server.extent_max_y|floatformat:6 }}, {{ layer.server.extent_min_x|add:layer.server.extent_max_x|floatformat:6 }})"
-                                title="Zoom to server area">
-                                🌍
-                        </button>
+                    {% if layer.geometry.geom_type == 'Point' %}
+                    <button class="btn-zoom"
+                        onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.y }}, {{ layer.geometry.x }})"
+                        title="Zoom to layer location">
+                        🎯
+                    </button>
                     {% else %}
-                        <!-- No location data available -->
-                        <button class="btn-zoom disabled" 
-                                title="No location data available"
-                                disabled>
-                                ❓
-                        </button>
+                    <button class="btn-zoom"
+                        onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.centroid.y }}, {{ layer.geometry.centroid.x }})"
+                        title="Zoom to layer center">
+                        🎯
+                    </button>
                     {% endif %}
-                    
+                    {% elif layer.offsetX != 0 or layer.offsetY != 0 %}
+                    <!-- Handle offset coordinates -->
+                    <button class="btn-zoom"
+                        onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.offsetY }}, {{ layer.offsetX }})"
+                        title="Zoom to layer offset location">
+                        🎯
+                    </button>
+                    {% elif layer.server.extent_min_x and layer.server.extent_max_x %}
+                    <!-- Fallback to server extent center -->
+                    <button class="btn-zoom"
+                        onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.server.extent_min_y|add:layer.server.extent_max_y|floatformat:6 }}, {{ layer.server.extent_min_x|add:layer.server.extent_max_x|floatformat:6 }})"
+                        title="Zoom to server area">
+                        🌍
+                    </button>
+                    {% else %}
+                    <!-- No location data available -->
+                    <button class="btn-zoom disabled" title="No location data available" disabled>
+                        ❓
+                    </button>
+                    {% endif %}
+
                     <!-- Preview button with HTMX -->
-                    <button class="btn-preview" 
-                            hx-get="{% url 'layer_preview_features' %}"
-                            hx-include="[name='bbox']"
-                            hx-vals='{"layer_id": "{{ layer.layer_id }}"}'
-                            hx-trigger="click"
-                            hx-target="#preview-content"
-                            hx-swap="innerHTML"
-                            hx-indicator=".htmx-indicator"
-                            title="Toggle layer preview"
-                            data-layer-id="{{ layer.layer_id }}">
+                    <button class="btn-preview" hx-get="{% url 'layer_preview_features' %}" hx-include="[name='bbox']"
+                        hx-vals='{"layer_id": "{{ layer.layer_id }}"}' hx-trigger="click" hx-target="#preview-content"
+                        hx-swap="innerHTML" hx-indicator=".htmx-indicator" title="Toggle layer preview"
+                        data-layer-id="{{ layer.layer_id }}">
                         👁️
                     </button>
-                    
+
                     <!-- Download single layer button -->
-                    <button class="btn-download-single" 
-                            onclick="downloadArea({{ layer.layer_id }}, {{ layer.offsetY|default:'null' }}, {{ layer.offsetX|default:'null' }})"
-                            title="Download this layer">
+                    <button class="btn-download-single"
+                        onclick="downloadArea({{ layer.layer_id }}, {{ layer.offsetY|default:'null' }}, {{ layer.offsetX|default:'null' }})"
+                        title="Download this layer">
                         💾
                     </button>
                 </div>
@@ -116,36 +192,37 @@
 <!-- Layer status info at bottom -->
 <div class="layer-stats">
     <small>
-        Total layers: {{ layers|length }} | 
+        Total layers: {{ layers|length }} |
         <span id="layersWithGeometry">Calculating...</span> with location data |
         <span id="selectedLayers">0</span> selected
     </small>
 </div>
 
 <script>
-// Calculate layer statistics
-document.addEventListener('DOMContentLoaded', function() {
-    const layerItems = document.querySelectorAll('.layer-item');
-    let withGeometry = 0;
-    
-    layerItems.forEach(item => {
-        const hasGeometry = !item.querySelector('.no-geometry');
-        if (hasGeometry) withGeometry++;
+    // Calculate layer statistics
+    document.addEventListener('DOMContentLoaded', function () {
+        const layerItems = document.querySelectorAll('.layer-item');
+        let withGeometry = 0;
+
+        layerItems.forEach(item => {
+            const hasGeometry = !item.querySelector('.no-geometry');
+            if (hasGeometry) withGeometry++;
+        });
+
+        document.getElementById('layersWithGeometry').textContent = withGeometry;
     });
-    
-    document.getElementById('layersWithGeometry').textContent = withGeometry;
-});
 
-// Update selected count
-function updateSelectedCount() {
-    const selected = document.querySelectorAll('.layer-checkbox:checked').length;
-    document.getElementById('selectedLayers').textContent = selected;
-}
+    // Update selected count
+    function updateSelectedCount() {
+        const selected = document.querySelectorAll('.layer-checkbox:checked').length;
+        document.getElementById('selectedLayers').textContent = selected;
+    }
 
-// Add event listeners to checkboxes
-document.querySelectorAll('.layer-checkbox').forEach(cb => {
-    cb.addEventListener('change', updateSelectedCount);
-});
+    // Add event listeners to checkboxes
+    document.querySelectorAll('.layer-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
+    });
 </script>
 
 {% endif %}
+{% endblock %}

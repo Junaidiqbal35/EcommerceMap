@@ -278,7 +278,6 @@
         
         // Listen for HTMX events
         document.body.addEventListener('htmx:afterSwap', function(evt) {
-            MapController.handleHtmxAfterSwap(evt);
             
             // Update downloads badge
             if (evt.detail.target.id === 'downloadsContent') {

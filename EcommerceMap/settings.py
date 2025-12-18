@@ -58,6 +58,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
+    'core.middleware.BrokenPipeMiddleware',
 ]
 # CSRF Settings
 CSRF_USE_SESSIONS = False
@@ -176,3 +177,37 @@ CACHES = {
         'LOCATION': 'redis://127.0.0.1:6379/1',
     }
 }
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose'
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': 'logs/gis.log',
+            'maxBytes': 1024*1024*10,  # 10MB
+            'backupCount': 5,
+            'formatter': 'verbose'
+        },
+    },
+    'loggers': {
+        'core': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+SECURE_SSL_REDIRECT = False  # Set True in production
+SESSION_COOKIE_SECURE = False  # Set True in production with HTTPS
+CSRF_COOKIE_SECURE = False  # Set True in production with HTTPS

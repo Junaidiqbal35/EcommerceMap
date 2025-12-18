@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.gis.db import models as gis_models
 from accounts.models import User
+from django.utils import timezone
 
 
 class Server(models.Model):
@@ -87,19 +88,71 @@ class DownloadRecord(models.Model):
         ordering = ['-downloaded_at']
 
 class UserLayerPreference(models.Model):
-    """Track user preferences for layers"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='layer_preferences')
-    layer = models.ForeignKey(Layer, on_delete=models.CASCADE, related_name='user_preferences')
+    """
+    Track user's layer preferences and download history
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    layer = models.ForeignKey('Layer', on_delete=models.CASCADE)
+    
+    # Preference tracking
+    is_favorite = models.BooleanField(default=False)
     download_count = models.IntegerField(default=0)
     last_downloaded = models.DateTimeField(null=True, blank=True)
-    first_downloaded = models.DateTimeField(auto_now_add=True)
-    is_favorite = models.BooleanField(default=False)
-    is_hidden = models.BooleanField(default=False)
-    custom_name = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ('user', 'layer')
-
+        unique_together = ['user', 'layer']
+        indexes = [
+            models.Index(fields=['user', '-download_count']),
+            models.Index(fields=['user', '-last_downloaded']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.layer.name}"
+    
+    def increment_download(self):
+        """Increment download counter and update timestamp"""
+        self.download_count += 1
+        self.last_downloaded = timezone.now()
+        self.save(update_fields=['download_count', 'last_downloaded', 'updated_at'])
+    
+    def mark_favorite(self):
+        """Mark layer as favorite"""
+        self.is_favorite = True
+        self.save(update_fields=['is_favorite', 'updated_at'])
+    
+    def unmark_favorite(self):
+        """Remove favorite status"""
+        self.is_favorite = False
+        self.save(update_fields=['is_favorite', 'updated_at'])
+    
+    @classmethod
+    def get_or_create_preference(cls, user, layer):
+        """Get or create preference for user-layer combination"""
+        preference, created = cls.objects.get_or_create(
+            user=user,
+            layer=layer
+        )
+        return preference
+    
+    @classmethod
+    def get_user_favorites(cls, user):
+        """Get all favorite layers for a user"""
+        return cls.objects.filter(
+            user=user,
+            is_favorite=True
+        ).select_related('layer')
+    
+    @classmethod
+    def get_frequently_downloaded(cls, user, limit=10):
+        """Get user's most downloaded layers"""
+        return cls.objects.filter(
+            user=user,
+            download_count__gt=0
+        ).order_by('-download_count')[:limit].select_related('layer')  
 class LayerCache(models.Model):
     """Cache layer metadata"""
     layer = models.OneToOneField(Layer, on_delete=models.CASCADE, related_name='cache')

@@ -7,6 +7,7 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import timedelta
 import logging
+from core.models import DownloadRecord, UserLayerPreference
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ class UserPreferenceService:
         """
         Get user's preferred layers ordered by download count.
         """
-        from core.models import UserLayerPreference
+        
         
         preferences = UserLayerPreference.objects.filter(
             user=self.user,
@@ -38,7 +39,6 @@ class UserPreferenceService:
     
     def get_favorite_layers(self):
         """Get user's favorite layers"""
-        from core.models import UserLayerPreference
         
         return UserLayerPreference.objects.filter(
             user=self.user,
@@ -49,7 +49,6 @@ class UserPreferenceService:
     
     def get_recent_downloads(self, days=7, limit=10):
         """Get recently downloaded layers"""
-        from core.models import DownloadRecord
         
         cutoff = timezone.now() - timedelta(days=days)
         
@@ -66,7 +65,7 @@ class UserPreferenceService:
         """
         Record a download and update preferences.
         """
-        from core.models import DownloadRecord, UserLayerPreference
+        
         
         # Create download record
         download = DownloadRecord.objects.create(
@@ -97,7 +96,7 @@ class UserPreferenceService:
     
     def toggle_favorite(self, layer):
         """Toggle favorite status for a layer"""
-        from core.models import UserLayerPreference
+        
         
         pref, created = UserLayerPreference.objects.get_or_create(
             user=self.user,
@@ -110,7 +109,6 @@ class UserPreferenceService:
     
     def hide_layer(self, layer):
         """Hide a layer from user's download history"""
-        from core.models import UserLayerPreference
         
         pref, created = UserLayerPreference.objects.get_or_create(
             user=self.user,
@@ -121,7 +119,7 @@ class UserPreferenceService:
     
     def set_custom_name(self, layer, custom_name):
         """Set a custom name for a layer"""
-        from core.models import UserLayerPreference
+       
         
         pref, created = UserLayerPreference.objects.get_or_create(
             user=self.user,

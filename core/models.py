@@ -71,3 +71,61 @@ class DownloadRecord(models.Model):
 
     class Meta:
         ordering = ['-downloaded_at']
+
+
+class UserLayerPreference(models.Model):
+    """
+    Stores user's preferred layers for quick access.
+    Automatically updated when user downloads layers.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='layer_preferences')
+    layer = models.ForeignKey(Layer, on_delete=models.CASCADE, related_name='user_preferences')
+    download_count = models.IntegerField(default=1)
+    last_used = models.DateTimeField(auto_now=True)
+    is_favorite = models.BooleanField(default=False)  # User can manually favorite
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'layer']
+        ordering = ['-download_count', '-last_used']
+        verbose_name = 'User Layer Preference'
+        verbose_name_plural = 'User Layer Preferences'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.layer.name} ({self.download_count}x)"
+
+    @classmethod
+    def update_preference(cls, user, layer):
+        """
+        Update or create preference when user downloads a layer.
+        Increments download count and updates last_used.
+        """
+        pref, created = cls.objects.get_or_create(
+            user=user,
+            layer=layer,
+            defaults={'download_count': 1}
+        )
+        if not created:
+            pref.download_count += 1
+            pref.save(update_fields=['download_count', 'last_used'])
+        return pref
+
+    @classmethod
+    def get_user_preferred_layers(cls, user, limit=20):
+        """
+        Get user's most frequently used layers.
+        Returns layer IDs ordered by usage frequency.
+        """
+        return list(
+            cls.objects.filter(user=user)
+            .order_by('-download_count', '-last_used')[:limit]
+            .values_list('layer_id', flat=True)
+        )
+
+    @classmethod
+    def get_user_favorites(cls, user):
+        """Get layers marked as favorites."""
+        return list(
+            cls.objects.filter(user=user, is_favorite=True)
+            .values_list('layer_id', flat=True)
+        )

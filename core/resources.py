@@ -11,7 +11,7 @@ from .gda2020_converter import GDA2020Converter
 logger = logging.getLogger(__name__)
 
 
-class EnhancedServerResource(resources.ModelResource):
+class ServerResource(resources.ModelResource):
     """Enhanced Server resource with GDA2020 integration and auto-discovery"""
 
     class Meta:
@@ -122,7 +122,7 @@ class EnhancedServerResource(resources.ModelResource):
             logger.debug(f"Could not update extent for {instance.name}: {e}")
 
 
-class EnhancedLayerResource(resources.ModelResource):
+class LayerResource(resources.ModelResource):
     """Enhanced Layer resource with geometry handling and automatic discovery"""
 
     server = fields.Field(

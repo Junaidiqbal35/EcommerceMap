@@ -759,3 +759,108 @@ body {
         right: -100%;
     }
 }
+/* Add these styles to static/css/home.css */
+
+/* ============ USER PREFERENCES STYLES ============ */
+
+/* Preferred layer item highlight */
+.layer-item.preferred {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.layer-item.preferred:hover {
+  background: rgba(251, 191, 36, 0.25);
+}
+
+/* Favorite button */
+.btn-favorite {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  transition: transform 0.2s;
+  opacity: 0.6;
+}
+
+.btn-favorite:hover {
+  transform: scale(1.2);
+  opacity: 1;
+}
+
+.btn-favorite.is-favorite {
+  opacity: 1;
+}
+
+/* Nearby layer preferred highlight */
+.nearby-layer-item.preferred {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+/* Toast notification */
+#toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 500;
+  z-index: 3000;
+  transition: opacity 0.3s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Preference notification */
+#preferenceNotification {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, rgb(102, 126, 234) 0%, rgb(118, 75, 162) 100%);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  z-index: 2000;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+#preferenceNotification button {
+  transition: background 0.2s;
+}
+
+#preferenceNotification button:hover {
+  background: rgba(255,255,255,0.3) !important;
+}
+
+/* Separator line for preferred layers section */
+#layerList hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  margin: 16px 0;
+}
+
+/* Animation for preference loaded */
+@keyframes preferenceGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(251, 191, 36, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+  }
+}
+
+.layer-item.preferred.just-loaded {
+  animation: preferenceGlow 1s ease-out;
+}

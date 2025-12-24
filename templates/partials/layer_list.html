@@ -40,68 +40,36 @@
                     <div class="layer-meta">
                         <span class="layer-type">{{ layer.type }}</span>
                         <span class="feature-count" id="layer-status-{{ layer.layer_id }}"></span>
-                        {% if not layer.geometry and not layer.offsetX and not layer.offsetY %}
-                        <span class="no-geometry" title="No location data available">📍❌</span>
-                        {% endif %}
                     </div>
                 </label>
                 
                 <div class="layer-actions">
-                    <!-- Enhanced zoom button logic -->
                     {% if layer.geometry %}
-                        {% if layer.geometry.geom_type == 'Point' %}
-                            <button class="btn-zoom" 
-                                    onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.y }}, {{ layer.geometry.x }})"
-                                    title="Zoom to layer location">
-                                🎯
-                            </button>
-                        {% else %}
-                            <button class="btn-zoom" 
-                                    onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.centroid.y }}, {{ layer.geometry.centroid.x }})"
-                                    title="Zoom to layer center">
-                                🎯
-                            </button>
-                        {% endif %}
-                    {% elif layer.offsetX != 0 or layer.offsetY != 0 %}
-                        <!-- Handle offset coordinates -->
+                        <button class="btn-zoom" 
+                                onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.centroid.y }}, {{ layer.geometry.centroid.x }})"
+                                title="Zoom to layer">
+                            🎯
+                        </button>
+                    {% elif layer.offsetX and layer.offsetY %}
                         <button class="btn-zoom" 
                                 onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.offsetY }}, {{ layer.offsetX }})"
-                                title="Zoom to layer offset location">
-                                🎯
+                                title="Zoom to layer">
+                            🎯
                         </button>
-                    {% elif layer.server.extent_min_x and layer.server.extent_max_x %}
-                        <!-- Fallback to server extent center -->
+                    {% elif layer.server.extent_min_x %}
                         <button class="btn-zoom" 
-                                onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.server.extent_min_y|add:layer.server.extent_max_y|floatformat:6 }}, {{ layer.server.extent_min_x|add:layer.server.extent_max_x|floatformat:6 }})"
+                                onclick="zoomToServerExtent({{ layer.server.extent_min_y }}, {{ layer.server.extent_max_y }}, {{ layer.server.extent_min_x }}, {{ layer.server.extent_max_x }})"
                                 title="Zoom to server area">
-                                🌍
+                            🌍
                         </button>
                     {% else %}
-                        <!-- No location data available -->
-                        <button class="btn-zoom disabled" 
-                                title="No location data available"
-                                disabled>
-                                ❓
+                        <button class="btn-zoom disabled" title="No location data" disabled>
+                            ❓
                         </button>
                     {% endif %}
                     
-                    <!-- Preview button with HTMX -->
-                    <button class="btn-preview" 
-                            hx-get="{% url 'layer_preview_features' %}"
-                            hx-include="[name='bbox']"
-                            hx-vals='{"layer_id": "{{ layer.layer_id }}"}'
-                            hx-trigger="click"
-                            hx-target="#preview-content"
-                            hx-swap="innerHTML"
-                            hx-indicator=".htmx-indicator"
-                            title="Toggle layer preview"
-                            data-layer-id="{{ layer.layer_id }}">
-                        👁️
-                    </button>
-                    
-                    <!-- Download single layer button -->
                     <button class="btn-download-single" 
-                            onclick="downloadArea({{ layer.layer_id }}, {{ layer.offsetY|default:'null' }}, {{ layer.offsetX|default:'null' }})"
+                            onclick="downloadArea({{ layer.layer_id }})"
                             title="Download this layer">
                         💾
                     </button>
@@ -113,36 +81,19 @@
     {% endfor %}
 </div>
 
-<!-- Layer status info at bottom -->
 <div class="layer-stats">
     <small>
-        Total layers: {{ layers|length }} | 
-        <span id="layersWithGeometry">Calculating...</span> with location data |
+        Total: {{ layers|length }} layers | 
         <span id="selectedLayers">0</span> selected
     </small>
 </div>
 
 <script>
-// Calculate layer statistics
-document.addEventListener('DOMContentLoaded', function() {
-    const layerItems = document.querySelectorAll('.layer-item');
-    let withGeometry = 0;
-    
-    layerItems.forEach(item => {
-        const hasGeometry = !item.querySelector('.no-geometry');
-        if (hasGeometry) withGeometry++;
-    });
-    
-    document.getElementById('layersWithGeometry').textContent = withGeometry;
-});
-
-// Update selected count
 function updateSelectedCount() {
     const selected = document.querySelectorAll('.layer-checkbox:checked').length;
     document.getElementById('selectedLayers').textContent = selected;
 }
 
-// Add event listeners to checkboxes
 document.querySelectorAll('.layer-checkbox').forEach(cb => {
     cb.addEventListener('change', updateSelectedCount);
 });

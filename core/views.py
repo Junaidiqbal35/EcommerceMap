@@ -579,3 +579,58 @@ def draw_geometry_to_dxf(msp, geom, layer_name):
 
     except Exception as e:
         logger.error(f"Error drawing {geom_type}: {e}")
+
+@login_required
+def layer_list(request):
+    """
+    Return layer list as HTML partial for HTMX.
+    Supports search and filter parameters.
+    """
+    search = request.GET.get('search', '').strip()
+    filter_type = request.GET.get('filter', 'all')
+    
+    # Start with all layers
+    layers = Layer.objects.select_related('server').all()
+    
+    # Apply search filter
+    if search:
+        layers = layers.filter(name__icontains=search)
+    
+    # Apply type filter
+    if filter_type == 'water':
+        layers = layers.filter(name__icontains='WAT')
+    elif filter_type == 'electric':
+        layers = layers.filter(name__icontains='ELEC')
+    elif filter_type == 'road':
+        layers = layers.filter(name__icontains='ROAD')
+    elif filter_type == 'sewer':
+        layers = layers.filter(name__icontains='SEW')
+    elif filter_type == 'stormwater':
+        layers = layers.filter(name__icontains='SWD')
+    
+    # Group layers by server name (as dict for template)
+    grouped_layers = {}
+    for layer in layers:
+        server_name = layer.server.name if layer.server else 'Unknown'
+        if server_name not in grouped_layers:
+            grouped_layers[server_name] = []
+        grouped_layers[server_name].append(layer)
+    
+    context = {
+        'layers': layers,
+        'grouped_layers': grouped_layers,
+        'search': search,
+        'filter': filter_type,
+    }
+    
+    return render(request, 'partials/layer_list.html', context)
+
+
+@login_required
+def check_connects(request):
+    """Return user's available connects as JSON."""
+    connects = getattr(request.user, 'connects', 0)
+    return JsonResponse({
+        'connects': connects,
+        'username': request.user.username
+    })

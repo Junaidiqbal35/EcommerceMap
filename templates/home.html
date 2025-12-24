@@ -233,5 +233,13 @@
     window.updateNearbyCount = function() {
         MapController.updateNearbyCount();
     };
+    window.zoomToServerExtent = function(minY, maxY, minX, maxX) {
+    const lat = (minY + maxY) / 2;
+    const lng = (minX + maxX) / 2;
+    const map = MapController.getMap();
+    if (map) {
+        map.fitBounds([[minY, minX], [maxY, maxX]]);
+    }
+};
 </script>
 {% endblock %}

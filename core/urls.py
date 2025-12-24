@@ -12,6 +12,9 @@ urlpatterns = [
     path("nearby-layers/", views.nearby_layers, name="nearby_layers"),  # GET and POST
     path("export-dxf-multi/", views.export_dxf_multi, name="export_dxf_multi"),
     
+
+    # Utility
+    # path('check-connects/', views.check_connects, name='check_connects'),
     # API endpoints - User Preferences
     path("api/preferences/", views.get_user_preferences, name="get_user_preferences"),
     path("api/preferences/toggle-favorite/", views.toggle_favorite_layer, name="toggle_favorite_layer"),

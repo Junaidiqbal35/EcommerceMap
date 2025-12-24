@@ -1,628 +1,652 @@
-/* Map Controller - Complete Fixed Version */
-/* global L, htmx */
+/**
+ * MapController - HTMX-integrated Leaflet map controller
+ * Handles layer management, map interactions, and HTMX integration
+ */
 
-const MapController = {
-    map: null,
-    baseLayers: {},
-    previewLayers: {},
-    activeLayers: new Set(),
-    layerStatus: new Map(),
-    pendingRequests: new Map(),
-    config: {},
-    clickMarker: null,
+const MapController = (function() {
+    'use strict';
 
-    init(config) {
-        this.config = config;
-        console.log('MapController initializing with config:', config);
-        this.initMap();
-        this.initEventListeners();
-    },
+    // Private state
+    let map = null;
+    let config = {};
+    let activeLayers = {};
+    let previewLayers = {};
+    let selectedLayerIds = new Set();
+    let basemaps = {};
+    let currentBasemap = 'osm';
+    let clickMarker = null;
 
-    initMap() {
-        // Initialize map centered on Brisbane/Gold Coast area
-        this.map = L.map('map', {
-            center: [-27.9, 153.2], // Between Brisbane and Gold Coast
-            zoom: 11,
-            preferCanvas: true
+    // Constants
+    const DEFAULT_CENTER = [-27.47, 153.02]; // Brisbane, Australia
+    const DEFAULT_ZOOM = 10;
+    const SEARCH_RADIUS_M = 2000;
+
+    /**
+     * Initialize the map controller
+     */
+    function init(userConfig) {
+        config = userConfig || {};
+        
+        initMap();
+        initBasemaps();
+        initEventListeners();
+        
+        console.log('MapController initialized');
+    }
+
+    /**
+     * Initialize Leaflet map
+     */
+    function initMap() {
+        map = L.map('map', {
+            center: DEFAULT_CENTER,
+            zoom: DEFAULT_ZOOM,
+            zoomControl: true
         });
 
-        // Add base layers
-        this.baseLayers = {
-            'osm': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: 'OpenStreetMap',
+        // Add geocoder control
+        if (L.Control.geocoder) {
+            L.Control.geocoder({
+                defaultMarkGeocode: false,
+                placeholder: 'Search location...'
+            }).on('markgeocode', function(e) {
+                const bbox = e.geocode.bbox;
+                map.fitBounds(bbox);
+            }).addTo(map);
+        }
+
+        // Map click handler
+        map.on('click', handleMapClick);
+        
+        // Map move handler for preview updates
+        map.on('moveend', debounce(updateActivePreviews, 500));
+    }
+
+    /**
+     * Initialize basemap layers
+     */
+    function initBasemaps() {
+        basemaps = {
+            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
                 maxZoom: 19
             }),
-            'satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Esri',
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri',
                 maxZoom: 19
             }),
-            'dark': L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: 'CARTO',
+            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© CARTO',
                 maxZoom: 19
             })
         };
 
-        this.baseLayers.osm.addTo(this.map);
-        L.control.scale().addTo(this.map);
+        // Add default basemap
+        basemaps.osm.addTo(map);
+    }
 
-        // Map events
-        this.map.on('moveend', () => this.onMapMove());
-        this.map.on('zoomend', () => this.onMapZoom());
-
-        // IMPORTANT: Add click handler for nearby layers
-        this.map.on('click', (e) => {
-            console.log('Map clicked at:', e.latlng);
-            this.handleMapClick(e);
+    /**
+     * Initialize event listeners
+     */
+    function initEventListeners() {
+        // Listen for connects updates
+        document.body.addEventListener('connectsUpdated', function() {
+            refreshConnectsDisplay();
         });
-    },
 
-    initEventListeners() {
-        // Listen for HTMX events
-        document.body.addEventListener('htmx:afterSwap', (evt) => {
-            console.log('HTMX swap completed');
-
-            // Reinitialize Alpine.js components if needed
-            if (window.Alpine && evt.detail.target.querySelector('[x-data]')) {
-                window.Alpine.initTree(evt.detail.target);
+        // Listen for layer toggle events from HTMX
+        document.body.addEventListener('layerToggled', function(e) {
+            if (e.detail && e.detail.layerId) {
+                updateLayerPreview(e.detail.layerId, e.detail.checked);
             }
         });
+    }
 
-        // Listen for filter button clicks (since they might be added dynamically)
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('filter-btn')) {
-                const filterType = e.target.dataset.filter || 'all';
-                this.applyFilter(filterType, e.target);
-            }
+    /**
+     * Handle map click - trigger nearby layers search
+     */
+    function handleMapClick(e) {
+        const { lat, lng } = e.latlng;
+
+        // Update click marker
+        if (clickMarker) {
+            map.removeLayer(clickMarker);
+        }
+        clickMarker = L.marker([lat, lng], {
+            icon: L.divIcon({
+                className: 'click-marker',
+                html: '<div class="pulse-marker">📍</div>',
+                iconSize: [30, 30],
+                iconAnchor: [15, 30]
+            })
+        }).addTo(map);
+
+        // Update hidden form and trigger HTMX request
+        document.getElementById('clickLat').value = lat.toFixed(6);
+        document.getElementById('clickLng').value = lng.toFixed(6);
+        document.getElementById('selectedLayers').value = Array.from(selectedLayerIds).join(',');
+
+        // Trigger the form submission via HTMX
+        htmx.trigger('#mapClickForm', 'submit');
+
+        showToast(`Searching layers near ${lat.toFixed(4)}, ${lng.toFixed(4)}...`, 'info');
+    }
+
+    /**
+     * Toggle layer visibility and preview
+     */
+    function toggleLayer(layerId, checkbox) {
+        const isChecked = checkbox ? checkbox.checked : !selectedLayerIds.has(layerId);
+
+        if (isChecked) {
+            selectedLayerIds.add(layerId);
+            loadLayerPreview(layerId);
+        } else {
+            selectedLayerIds.delete(layerId);
+            removeLayerPreview(layerId);
+        }
+
+        updateActiveCount();
+        
+        // Dispatch event for other components
+        document.body.dispatchEvent(new CustomEvent('layerToggled', {
+            detail: { layerId, checked: isChecked }
+        }));
+    }
+
+    /**
+     * Load layer preview on map
+     */
+    async function loadLayerPreview(layerId) {
+        if (!config.previewUrl) return;
+
+        const bounds = map.getBounds();
+        const params = new URLSearchParams({
+            layer_id: layerId,
+            minx: bounds.getWest(),
+            miny: bounds.getSouth(),
+            maxx: bounds.getEast(),
+            maxy: bounds.getNorth(),
+            zoom: map.getZoom()
         });
-    },
-
-    handleMapClick(e) {
-        const lat = e.latlng.lat;
-        const lng = e.latlng.lng;
-
-        console.log(`Getting nearby layers for: ${lat}, ${lng}`);
-
-        // Remove previous click marker
-        if (this.clickMarker) {
-            this.map.removeLayer(this.clickMarker);
-        }
-
-        // Add new click marker
-        this.clickMarker = L.circleMarker([lat, lng], {
-            radius: 8,
-            fillColor: '#ff7800',
-            color: '#fff',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).addTo(this.map);
-
-        // Update form values
-        const form = document.getElementById('mapClickForm');
-        if (form) {
-            document.getElementById('clickLat').value = lat;
-            document.getElementById('clickLng').value = lng;
-
-            // Get selected layers
-            const selectedLayerIds = Array.from(this.activeLayers).join(',');
-            document.getElementById('selectedLayers').value = selectedLayerIds;
-
-            console.log('Triggering HTMX form submit for nearby layers');
-
-            // Trigger HTMX request
-            htmx.trigger(form, 'submit');
-        } else {
-            console.error('mapClickForm not found');
-        }
-    },
-
-    onMapMove() {
-        this.refreshActivePreviews();
-    },
-
-    onMapZoom() {
-        const zoom = this.map.getZoom();
-        console.log('Map zoom:', zoom);
-
-        if (zoom < 12 && this.activeLayers.size > 0) {
-            this.showToast('Zoom in closer to see layer features', 'info');
-        }
-        this.refreshActivePreviews();
-    },
-
-    refreshActivePreviews() {
-        clearTimeout(this.refreshTimeout);
-        this.refreshTimeout = setTimeout(() => {
-            this.activeLayers.forEach(layerId => {
-                this.loadLayerPreview(layerId);
-            });
-        }, 500);
-    },
-
-    toggleLayer(layerId, checkbox) {
-        console.log(`Toggling layer ${layerId}: ${checkbox.checked}`);
-
-        if (checkbox.checked) {
-            this.activateLayer(layerId);
-        } else {
-            this.deactivateLayer(layerId);
-        }
-        this.updateActiveCount();
-    },
-
-    activateLayer(layerId) {
-        console.log(`Activating layer ${layerId}`);
-        this.activeLayers.add(layerId);
-
-        const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
-        if (layerItem) {
-            layerItem.classList.add('layer-active');
-        }
-
-        this.loadLayerPreview(layerId);
-    },
-
-    deactivateLayer(layerId) {
-        console.log(`Deactivating layer ${layerId}`);
-        this.activeLayers.delete(layerId);
-
-        if (this.previewLayers[layerId]) {
-            this.map.removeLayer(this.previewLayers[layerId]);
-            delete this.previewLayers[layerId];
-        }
-
-        if (this.pendingRequests.has(layerId)) {
-            const controller = this.pendingRequests.get(layerId);
-            controller.abort();
-            this.pendingRequests.delete(layerId);
-        }
-
-        const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
-        if (layerItem) {
-            layerItem.classList.remove('layer-active', 'layer-loading');
-        }
-    },
-
-    async loadLayerPreview(layerId) {
-        if (!this.activeLayers.has(layerId)) return;
-
-        // Cancel previous request
-        if (this.pendingRequests.has(layerId)) {
-            const controller = this.pendingRequests.get(layerId);
-            controller.abort();
-        }
-
-        const bounds = this.map.getBounds();
-        const zoom = this.map.getZoom();
-
-        console.log(`Loading preview for layer ${layerId} at zoom ${zoom}`);
-
-        if (zoom < 10) {
-            console.log('Zoom too low for preview');
-            this.updateLayerStatus(layerId, 'Zoom in to load', 'warning');
-            return;
-        }
-
-        const controller = new AbortController();
-        this.pendingRequests.set(layerId, controller);
-
-        const url = new URL(this.config.previewUrl, window.location.origin);
-        url.searchParams.append('layer_id', layerId);
-        url.searchParams.append('minx', bounds.getWest());
-        url.searchParams.append('miny', bounds.getSouth());
-        url.searchParams.append('maxx', bounds.getEast());
-        url.searchParams.append('maxy', bounds.getNorth());
-
-        const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
-        if (layerItem) {
-            layerItem.classList.add('layer-loading');
-        }
 
         try {
-            const response = await fetch(url, {
-                signal: controller.signal,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
+            const response = await fetch(`${config.previewUrl}?${params}`);
+            if (!response.ok) throw new Error('Failed to load preview');
 
-            const data = await response.json();
-            this.pendingRequests.delete(layerId);
-
-            if (layerItem) {
-                layerItem.classList.remove('layer-loading');
-            }
+            const geojson = await response.json();
 
             // Remove existing preview
-            if (this.previewLayers[layerId]) {
-                this.map.removeLayer(this.previewLayers[layerId]);
-                delete this.previewLayers[layerId];
+            if (previewLayers[layerId]) {
+                map.removeLayer(previewLayers[layerId]);
             }
 
-            // Add features if any
-            if (data.features && data.features.length > 0) {
-                console.log(`Adding ${data.features.length} features for layer ${layerId}`);
+            // Add new preview layer
+            if (geojson.features && geojson.features.length > 0) {
+                previewLayers[layerId] = L.geoJSON(geojson, {
+                    style: getLayerStyle(geojson.features[0]?.properties?.layer_type),
+                    pointToLayer: function(feature, latlng) {
+                        return L.circleMarker(latlng, {
+                            radius: 6,
+                            fillColor: getLayerColor(feature.properties?.layer_type),
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.7
+                        });
+                    },
+                    onEachFeature: function(feature, layer) {
+                        const props = feature.properties || {};
+                        layer.bindPopup(`
+                            <strong>${props.layer_name || 'Feature'}</strong><br>
+                            Type: ${props.layer_type || 'Unknown'}<br>
+                            ${props.diameter ? `Diameter: ${props.diameter}mm<br>` : ''}
+                            ${props.material ? `Material: ${props.material}<br>` : ''}
+                        `);
+                    }
+                }).addTo(map);
 
-                const geoJsonLayer = L.geoJSON(data, {
-                    style: (feature) => this.getFeatureStyle(feature),
-                    pointToLayer: (feature, latlng) => this.createPointMarker(feature, latlng),
-                    onEachFeature: (feature, layer) => this.bindFeaturePopup(feature, layer)
-                });
-
-                this.previewLayers[layerId] = geoJsonLayer;
-                geoJsonLayer.addTo(this.map);
-
-                this.updateLayerStatus(layerId, `${data.features.length} features`, 'success');
-            } else {
-                const message = data.message || 'No features in view';
-                this.updateLayerStatus(layerId, message, 'warning');
+                // Update feature count badge
+                updateFeatureCount(layerId, geojson.features.length);
             }
 
         } catch (error) {
-            this.pendingRequests.delete(layerId);
-
-            if (layerItem) {
-                layerItem.classList.remove('layer-loading');
-            }
-
-            if (error.name !== 'AbortError') {
-                console.error(`Failed to load preview for layer ${layerId}:`, error);
-                this.updateLayerStatus(layerId, 'Load error', 'error');
-            }
+            console.error(`Error loading preview for layer ${layerId}:`, error);
         }
-    },
+    }
 
-    updateLayerStatus(layerId, message, type) {
-        const statusEl = document.querySelector(`#layer-status-${layerId}`);
-        if (statusEl) {
-            statusEl.textContent = message;
-            statusEl.className = `feature-count status-${type}`;
+    /**
+     * Remove layer preview from map
+     */
+    function removeLayerPreview(layerId) {
+        if (previewLayers[layerId]) {
+            map.removeLayer(previewLayers[layerId]);
+            delete previewLayers[layerId];
         }
-    },
+        updateFeatureCount(layerId, 0);
+    }
 
-    getFeatureStyle(feature) {
-        const layerName = (feature.properties?.layer_name || '').toLowerCase();
-
-        // Color scheme based on infrastructure type
-        if (layerName.includes('water') || layerName.includes('hydrant')) {
-            return { color: '#3b82f6', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('sewer') || layerName.includes('waste')) {
-            return { color: '#84cc16', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('storm') || layerName.includes('drain')) {
-            return { color: '#06b6d4', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('electric') || layerName.includes('power')) {
-            return { color: '#f59e0b', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('road') || layerName.includes('street')) {
-            return { color: '#6b7280', weight: 3, opacity: 0.8, fillOpacity: 0.2 };
-        }
-        return { color: '#8b5cf6', weight: 2, opacity: 0.7, fillOpacity: 0.3 };
-    },
-
-    createPointMarker(feature, latlng) {
-        const style = this.getFeatureStyle(feature);
-        return L.circleMarker(latlng, {
-            radius: 6,
-            fillColor: style.color,
-            color: '#fff',
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8
+    /**
+     * Update all active layer previews (called on map move)
+     */
+    function updateActivePreviews() {
+        selectedLayerIds.forEach(layerId => {
+            loadLayerPreview(layerId);
         });
-    },
+    }
 
-    bindFeaturePopup(feature, layer) {
-        const props = feature.properties || {};
-        let popupContent = '<div class="feature-popup">';
-        popupContent += `<h4>${props.layer_name || 'Feature'}</h4>`;
-
-        const excludeKeys = ['layer_name', 'layer_type', 'layer_id'];
-        Object.keys(props).forEach(key => {
-            if (!excludeKeys.includes(key) && props[key] !== null) {
-                const displayKey = key.replace(/_/g, ' ').toUpperCase();
-                popupContent += `<div><strong>${displayKey}:</strong> ${props[key]}</div>`;
+    /**
+     * Zoom to a specific layer location
+     */
+    function zoomToLayer(layerId, lat, lng) {
+        if (lat && lng) {
+            map.flyTo([lat, lng], 16, {
+                duration: 1.5
+            });
+            
+            // Ensure layer is selected and preview is loaded
+            if (!selectedLayerIds.has(layerId)) {
+                const checkbox = document.getElementById(`layer-check-${layerId}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    toggleLayer(layerId, checkbox);
+                }
             }
-        });
-        popupContent += '</div>';
+        } else {
+            showToast('No location data available for this layer', 'warning');
+        }
+    }
 
-        layer.bindPopup(popupContent, {
-            maxWidth: 300,
-            className: 'custom-popup'
-        });
-    },
-
-    zoomToLayer(layerId, lat, lng) {
-        console.log(`Zooming to layer ${layerId} at ${lat}, ${lng}`);
-
-        // Check for null/invalid coordinates
-        if (!lat || !lng || lat === 'null' || lng === 'null' || lat === 'None' || lng === 'None') {
-            this.showToast('No location data for this layer', 'warning');
+    /**
+     * Download area for a specific layer
+     */
+    function downloadArea(layerId, lat, lng) {
+        if (!lat || !lng) {
+            showToast('No location data available', 'error');
             return;
         }
 
-        lat = parseFloat(lat);
-        lng = parseFloat(lng);
+        Swal.fire({
+            title: 'Download Layer',
+            text: `Download this layer's data as DXF?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Download',
+            confirmButtonColor: '#667eea',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                processDownload([layerId], lat, lng);
+            }
+        });
+    }
 
-        if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-            this.showToast('Invalid coordinates for this layer', 'error');
+    /**
+     * Download nearby layers
+     */
+    function downloadNearbyLayers() {
+        const checkboxes = document.querySelectorAll('#nearbyContent input[name="layer_ids[]"]:checked');
+        const layerIds = Array.from(checkboxes).map(cb => cb.value);
+
+        if (layerIds.length === 0) {
+            showToast('Please select at least one layer', 'warning');
             return;
         }
 
-        this.map.setView([lat, lng], 15, {
-            animate: true,
-            duration: 1.0
+        const lat = parseFloat(document.getElementById('clickLat').value);
+        const lng = parseFloat(document.getElementById('clickLng').value);
+
+        processDownload(layerIds, lat, lng);
+    }
+
+    /**
+     * Process download request
+     */
+    async function processDownload(layerIds, lat, lng) {
+        const offset = 0.01; // ~1km
+        const bounds = {
+            minx: lng - offset,
+            miny: lat - offset,
+            maxx: lng + offset,
+            maxy: lat + offset
+        };
+
+        // Show loading state
+        Swal.fire({
+            title: 'Preparing Download',
+            html: 'Fetching layer data...',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
         });
 
-        // Flash marker at location
-        const marker = L.circleMarker([lat, lng], {
-            radius: 12,
-            fillColor: '#ff7800',
-            color: '#fff',
-            weight: 3,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).addTo(this.map);
+        try {
+            const formData = new FormData();
+            layerIds.forEach(id => formData.append('layer_ids[]', id));
+            formData.append('minx', bounds.minx);
+            formData.append('miny', bounds.miny);
+            formData.append('maxx', bounds.maxx);
+            formData.append('maxy', bounds.maxy);
+            formData.append('lat', lat);
+            formData.append('lng', lng);
 
-        // Pulse effect
-        let pulseCount = 0;
-        const pulseInterval = setInterval(() => {
-            pulseCount++;
-            marker.setRadius(pulseCount % 2 === 0 ? 12 : 15);
-            if (pulseCount >= 6) {
-                clearInterval(pulseInterval);
-                setTimeout(() => this.map.removeLayer(marker), 500);
+            const response = await fetch(config.exportUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': config.csrfToken
+                },
+                body: formData
+            });
+
+            // Check content type to determine response type
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                const data = await response.json();
+                if (!data.success) {
+                    throw new Error(data.error || 'Download failed');
+                }
+            } else if (contentType && (contentType.includes('application/dxf') || contentType.includes('application/octet-stream'))) {
+                // Download the file
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gis_export_${new Date().toISOString().slice(0, 10)}.dxf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                Swal.fire({
+                    title: 'Download Complete!',
+                    text: `Successfully exported ${layerIds.length} layer(s)`,
+                    icon: 'success',
+                    confirmButtonColor: '#667eea'
+                });
+
+                // Update connects display
+                document.body.dispatchEvent(new CustomEvent('connectsUpdated'));
+                return;
             }
-        }, 300);
 
-        // Auto-activate layer
-        const checkbox = document.getElementById(`layer-${layerId}`);
-        if (checkbox && !checkbox.checked) {
-            checkbox.checked = true;
-            this.toggleLayer(layerId, checkbox);
+            throw new Error('Unexpected response type');
+
+        } catch (error) {
+            console.error('Download error:', error);
+            Swal.fire({
+                title: 'Download Failed',
+                text: error.message || 'An error occurred during download',
+                icon: 'error',
+                confirmButtonColor: '#667eea'
+            });
         }
-    },
+    }
 
-    updateActiveCount() {
-        const count = this.activeLayers.size;
+    /**
+     * Change basemap
+     */
+    function changeBasemap(name) {
+        if (basemaps[currentBasemap]) {
+            map.removeLayer(basemaps[currentBasemap]);
+        }
+
+        if (basemaps[name]) {
+            basemaps[name].addTo(map);
+            currentBasemap = name;
+        }
+    }
+
+    /**
+     * Toggle basemap menu visibility
+     */
+    function toggleBasemapMenu() {
+        const options = document.getElementById('basemapOptions');
+        if (options) {
+            options.style.display = options.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+
+    /**
+     * Filter layers by type
+     */
+    function filterLayers(type, button) {
+        // Update active button state
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        if (button) button.classList.add('active');
+
+        // Trigger HTMX request with filter
+        const searchInput = document.getElementById('layerSearch');
+        const currentSearch = searchInput ? searchInput.value : '';
+
+        htmx.ajax('GET', `${config.layersUrl}?search=${currentSearch}&type=${type}`, {
+            target: '#layerListContent',
+            swap: 'innerHTML'
+        });
+    }
+
+    /**
+     * Refresh layers list
+     */
+    function refreshLayers() {
+        htmx.ajax('GET', config.layersUrl, {
+            target: '#layerListContent',
+            swap: 'innerHTML'
+        });
+        showToast('Layers refreshed', 'success');
+    }
+
+    /**
+     * Open nearby sidebar
+     */
+    function openNearbySidebar() {
+        const sidebar = document.getElementById('nearbySidebar');
+        if (sidebar) {
+            sidebar.classList.add('active');
+        }
+    }
+
+    /**
+     * Close nearby sidebar
+     */
+    function closeNearbySidebar() {
+        const sidebar = document.getElementById('nearbySidebar');
+        if (sidebar) {
+            sidebar.classList.remove('active');
+        }
+
+        // Remove click marker
+        if (clickMarker) {
+            map.removeLayer(clickMarker);
+            clickMarker = null;
+        }
+    }
+
+    /**
+     * Close download modal
+     */
+    function closeDownloadModal() {
+        const modal = document.getElementById('downloadResultModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    /**
+     * Handle HTMX after swap events
+     */
+    function handleHtmxAfterSwap(evt) {
+        // Update counts after layer list loads
+        if (evt.detail.target.id === 'layerListContent') {
+            updateActiveCount();
+        }
+        
+        // Update nearby count after nearby layers load
+        if (evt.detail.target.id === 'nearbyContent') {
+            updateNearbyCount();
+        }
+    }
+
+    /**
+     * Update active layer count display
+     */
+    function updateActiveCount() {
         const countEl = document.getElementById('activeCount');
         if (countEl) {
-            countEl.textContent = count > 0 ? `(${count})` : '';
+            const count = selectedLayerIds.size;
+            countEl.textContent = count > 0 ? `(${count} active)` : '';
         }
-    },
+    }
 
-    showToast(message, type = 'info') {
+    /**
+     * Update nearby layer count display
+     */
+    function updateNearbyCount() {
+        const countEl = document.getElementById('nearbyCount');
+        const checkboxes = document.querySelectorAll('#nearbyContent input[name="layer_ids[]"]:checked');
+        if (countEl) {
+            countEl.textContent = checkboxes.length > 0 ? `(${checkboxes.length} selected)` : '';
+        }
+    }
+
+    /**
+     * Update feature count badge for a layer
+     */
+    function updateFeatureCount(layerId, count) {
+        const badge = document.querySelector(`#layer-item-${layerId} .feature-count`);
+        if (badge) {
+            badge.textContent = count > 0 ? count : '';
+            badge.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+    }
+
+    /**
+     * Refresh connects display
+     */
+    function refreshConnectsDisplay() {
+        const connectsEl = document.querySelector('.connects-count');
+        if (connectsEl && config.connectsUrl) {
+            htmx.ajax('GET', config.connectsUrl, {
+                target: '.connects-count',
+                swap: 'innerHTML'
+            });
+        }
+    }
+
+    /**
+     * Get layer style based on type
+     */
+    function getLayerStyle(type) {
+        const styles = {
+            polygon: {
+                color: '#3388ff',
+                weight: 2,
+                opacity: 0.8,
+                fillOpacity: 0.3
+            },
+            polyline: {
+                color: '#ff7800',
+                weight: 3,
+                opacity: 0.8
+            },
+            point: {
+                color: '#51bbd6',
+                weight: 2,
+                opacity: 0.8
+            }
+        };
+        return styles[type] || styles.polyline;
+    }
+
+    /**
+     * Get layer color based on type
+     */
+    function getLayerColor(type) {
+        const colors = {
+            point: '#e74c3c',
+            polyline: '#f39c12',
+            polygon: '#3498db'
+        };
+        return colors[type] || '#95a5a6';
+    }
+
+    /**
+     * Show toast notification
+     */
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        toast.textContent = message;
-
-        let container = document.getElementById('toastContainer');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'toastContainer';
-            container.className = 'toast-container';
-            document.body.appendChild(container);
-        }
-
+        
+        const icons = {
+            success: '✅',
+            error: '❌',
+            warning: '⚠️',
+            info: 'ℹ️'
+        };
+        
+        toast.innerHTML = `
+            <span class="toast-icon">${icons[type] || icons.info}</span>
+            <span class="toast-message">${message}</span>
+        `;
+        
         container.appendChild(toast);
 
         // Animate in
-        requestAnimationFrame(() => {
-            toast.classList.add('show');
-        });
+        setTimeout(() => toast.classList.add('show'), 10);
 
         // Remove after delay
         setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
         }, 3000);
-    },
-
-    applyFilter(filterType, button) {
-        console.log('Applying filter:', filterType);
-
-        // Update button states
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        if (button) {
-            button.classList.add('active');
-        }
-
-        // Update search with filter
-        const searchInput = document.getElementById('layerSearch');
-        if (searchInput) {
-            const currentUrl = searchInput.getAttribute('hx-get');
-            const url = new URL(currentUrl, window.location.origin);
-            url.searchParams.set('filter', filterType);
-            searchInput.setAttribute('hx-get', url.pathname + url.search);
-
-            // Trigger search
-            htmx.trigger(searchInput, 'keyup');
-        }
-    },
-
-    refreshLayers() {
-        console.log('Refreshing all active layers');
-        this.refreshActivePreviews();
-        this.showToast('Refreshing layers...', 'info');
-    },
-
-    changeBasemap(mapType) {
-        Object.values(this.baseLayers).forEach(layer => {
-            this.map.removeLayer(layer);
-        });
-
-        if (this.baseLayers[mapType]) {
-            this.baseLayers[mapType].addTo(this.map);
-            this.showToast(`Switched to ${mapType} map`, 'success');
-        }
-    },
-
-    toggleBasemapMenu() {
-        const menu = document.getElementById('basemapOptions');
-        if (menu) {
-            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-        }
-    },
-
-    // Nearby layers functions
-    openNearbySidebar() {
-        console.log('Opening nearby sidebar');
-        const sidebar = document.getElementById('nearbySidebar');
-        if (sidebar) {
-            sidebar.classList.add('open');
-        }
-    },
-
-    closeNearbySidebar() {
-        console.log('Closing nearby sidebar');
-        const sidebar = document.getElementById('nearbySidebar');
-        if (sidebar) {
-            sidebar.classList.remove('open');
-        }
-
-        // Remove click marker
-        if (this.clickMarker) {
-            this.map.removeLayer(this.clickMarker);
-            this.clickMarker = null;
-        }
-    },
-
-    // Download functions
-    async downloadArea(layerId, lat, lng) {
-        const bounds = this.map.getBounds();
-        const selectedLayers = layerId ? [layerId] : Array.from(this.activeLayers);
-
-        if (selectedLayers.length === 0) {
-            this.showToast('Please select layers to download', 'warning');
-            return;
-        }
-
-        // Show loading
-        this.showToast('Preparing download...', 'info');
-
-        const formData = new FormData();
-        formData.append('csrfmiddlewaretoken', this.config.csrfToken);
-        selectedLayers.forEach(id => formData.append('layer_ids[]', id));
-        formData.append('minx', bounds.getWest());
-        formData.append('miny', bounds.getSouth());
-        formData.append('maxx', bounds.getEast());
-        formData.append('maxy', bounds.getNorth());
-        formData.append('lat', lat || bounds.getCenter().lat);
-        formData.append('lng', lng || bounds.getCenter().lng);
-
-        try {
-            const response = await fetch(this.config.exportUrl, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (response.ok) {
-                const contentType = response.headers.get('content-type');
-
-                if (contentType && contentType.includes('application/dxf')) {
-                    // Handle DXF file download
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `layers_export_${new Date().getTime()}.dxf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-
-                    this.showToast('Download started successfully!', 'success');
-                } else {
-                    // Handle JSON error response
-                    const data = await response.json();
-                    const errorMsg = data.error || 'Export failed';
-                    this.showToast(errorMsg, 'error');
-
-                    // Show detailed error if available
-                    if (data.details) {
-                        console.error('Export error details:', data.details);
-                    }
-                }
-            } else {
-                this.showToast('Export request failed', 'error');
-            }
-        } catch (error) {
-            console.error('Download error:', error);
-            this.showToast('Download failed. Please try again.', 'error');
-        }
-    },
-
-    async downloadNearbyLayers() {
-        const form = document.getElementById('nearbyDownloadForm');
-        if (!form) {
-            console.error('Nearby download form not found');
-            return;
-        }
-
-        const checkedBoxes = form.querySelectorAll('input[name="layer_ids[]"]:checked');
-        if (checkedBoxes.length === 0) {
-            this.showToast('Please select layers to download', 'warning');
-            return;
-        }
-
-        this.showToast(`Downloading ${checkedBoxes.length} layers...`, 'info');
-
-        const formData = new FormData(form);
-        const bounds = this.map.getBounds();
-        formData.append('minx', bounds.getWest());
-        formData.append('miny', bounds.getSouth());
-        formData.append('maxx', bounds.getEast());
-        formData.append('maxy', bounds.getNorth());
-
-        try {
-            const response = await fetch(this.config.exportUrl, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (response.ok) {
-                const contentType = response.headers.get('content-type');
-
-                if (contentType && contentType.includes('application/dxf')) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `nearby_layers_${new Date().getTime()}.dxf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-
-                    this.showToast('Download started successfully!', 'success');
-
-                    // Close sidebar after successful download
-                    setTimeout(() => this.closeNearbySidebar(), 2000);
-                } else {
-                    const data = await response.json();
-                    this.showToast(data.error || 'Export failed', 'error');
-                }
-            }
-        } catch (error) {
-            console.error('Download error:', error);
-            this.showToast('Download failed', 'error');
-        }
     }
-};
 
-// Global function bindings
-window.MapController = MapController;
-window.toggleLayer = (layerId, checkbox) => MapController.toggleLayer(layerId, checkbox);
-window.zoomToLayer = (layerId, lat, lng) => MapController.zoomToLayer(layerId, lat, lng);
-window.downloadArea = (layerId, lat, lng) => MapController.downloadArea(layerId, lat, lng);
-window.downloadNearbyLayers = () => MapController.downloadNearbyLayers();
-window.updateNearbyCount = () => {
-    const form = document.getElementById('nearbyDownloadForm');
-    if (form) {
-        const checked = form.querySelectorAll('input[name="layer_ids[]"]:checked').length;
-        const countEl = document.getElementById('nearbyCount');
-        if (countEl) {
-            countEl.textContent = checked > 0 ? `(${checked})` : '';
-        }
+    /**
+     * Debounce utility function
+     */
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
     }
-};
+
+    // Public API
+    return {
+        init,
+        toggleLayer,
+        zoomToLayer,
+        downloadArea,
+        downloadNearbyLayers,
+        changeBasemap,
+        toggleBasemapMenu,
+        filterLayers,
+        refreshLayers,
+        openNearbySidebar,
+        closeNearbySidebar,
+        closeDownloadModal,
+        handleHtmxAfterSwap,
+        updateNearbyCount,
+        showToast,
+        
+        // Expose map for advanced usage
+        getMap: () => map,
+        getSelectedLayers: () => Array.from(selectedLayerIds)
+    };
+
+})();
+
+// Export for module systems if needed
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = MapController;
+}

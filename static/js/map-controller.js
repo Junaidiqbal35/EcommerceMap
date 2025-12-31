@@ -1,4 +1,4 @@
-/* Map Controller - Complete Fixed Version */
+/* Map Controller - Fixed Version with Single Preferred Layer Auto-Select */
 /* global L, htmx */
 
 const MapController = {
@@ -10,18 +10,22 @@ const MapController = {
     pendingRequests: new Map(),
     config: {},
     clickMarker: null,
+    preferredLayerIds: [],
 
     init(config) {
         this.config = config;
         console.log('MapController initializing with config:', config);
         this.initMap();
         this.initEventListeners();
+
+        // Load preferred layers after a short delay to ensure DOM is ready
+        setTimeout(() => this.loadPreferredLayers(), 800);
     },
 
     initMap() {
         // Initialize map centered on Brisbane/Gold Coast area
         this.map = L.map('map', {
-            center: [-27.9, 153.2], // Between Brisbane and Gold Coast
+            center: [-27.9, 153.2],
             zoom: 11,
             preferCanvas: true
         });
@@ -49,7 +53,7 @@ const MapController = {
         this.map.on('moveend', () => this.onMapMove());
         this.map.on('zoomend', () => this.onMapZoom());
 
-        // IMPORTANT: Add click handler for nearby layers
+        // Add click handler for nearby layers
         this.map.on('click', (e) => {
             console.log('Map clicked at:', e.latlng);
             this.handleMapClick(e);
@@ -65,15 +69,83 @@ const MapController = {
             if (window.Alpine && evt.detail.target.querySelector('[x-data]')) {
                 window.Alpine.initTree(evt.detail.target);
             }
+
+            // Re-apply preferred layer styling after layer list is swapped
+            if (evt.detail.target.id === 'layer-list' || evt.detail.target.closest('#layer-list')) {
+                setTimeout(() => this.highlightPreferredLayer(), 300);
+            }
+
+            // Open sidebar when nearby content loads
+            if (evt.detail.target.id === 'nearbyContent') {
+                this.openNearbySidebar();
+            }
         });
 
-        // Listen for filter button clicks (since they might be added dynamically)
+        // Listen for filter button clicks
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('filter-btn')) {
                 const filterType = e.target.dataset.filter || 'all';
                 this.applyFilter(filterType, e.target);
             }
         });
+    },
+
+    // Load and activate ONE preferred layer (the most used one)
+    loadPreferredLayers() {
+        // Check if preferredLayerIds was set by the template
+        if (window.preferredLayerIds && Array.isArray(window.preferredLayerIds)) {
+            this.preferredLayerIds = window.preferredLayerIds;
+            console.log('Loaded preferred layer IDs:', this.preferredLayerIds);
+
+            // FIXED: Only activate ONE layer (the first one = most downloaded)
+            this.activateSinglePreferredLayer();
+        }
+    },
+
+    // FIXED: Activate only ONE preferred layer (highest download count)
+    activateSinglePreferredLayer() {
+        if (!this.preferredLayerIds || this.preferredLayerIds.length === 0) {
+            return;
+        }
+
+        // Get only the FIRST preferred layer (sorted by download_count DESC from backend)
+        const topLayerId = this.preferredLayerIds[0];
+        console.log('Auto-activating single preferred layer:', topLayerId);
+
+        const checkbox = document.getElementById(`layer-${topLayerId}`);
+        if (checkbox) {
+            // Check the checkbox
+            if (!checkbox.checked) {
+                checkbox.checked = true;
+            }
+            // Activate the layer
+            if (!this.activeLayers.has(topLayerId)) {
+                this.activateLayer(topLayerId);
+            }
+
+            // Scroll to and highlight the layer
+            const layerItem = document.querySelector(`[data-layer-id="${topLayerId}"]`);
+            if (layerItem) {
+                layerItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        this.updateActiveCount();
+        this.showToast('Your most-used layer loaded', 'success');
+    },
+
+    // Highlight preferred layers in the list (without activating them)
+    highlightPreferredLayer() {
+        if (!this.preferredLayerIds || this.preferredLayerIds.length === 0) {
+            return;
+        }
+
+        // Only ensure the first (active) preferred layer checkbox stays checked
+        const topLayerId = this.preferredLayerIds[0];
+        const checkbox = document.getElementById(`layer-${topLayerId}`);
+        if (checkbox && this.activeLayers.has(topLayerId) && !checkbox.checked) {
+            checkbox.checked = true;
+        }
     },
 
     handleMapClick(e) {
@@ -179,228 +251,177 @@ const MapController = {
 
         const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
         if (layerItem) {
-            layerItem.classList.remove('layer-active', 'layer-loading');
+            layerItem.classList.remove('layer-active');
         }
     },
 
     async loadLayerPreview(layerId) {
-        if (!this.activeLayers.has(layerId)) return;
-
-        // Cancel previous request
-        if (this.pendingRequests.has(layerId)) {
-            const controller = this.pendingRequests.get(layerId);
-            controller.abort();
-        }
-
         const bounds = this.map.getBounds();
         const zoom = this.map.getZoom();
 
-        console.log(`Loading preview for layer ${layerId} at zoom ${zoom}`);
-
+        // Skip if zoomed out too far
         if (zoom < 10) {
-            console.log('Zoom too low for preview');
-            this.updateLayerStatus(layerId, 'Zoom in to load', 'warning');
+            console.log(`Zoom ${zoom} too low, skipping preview for layer ${layerId}`);
             return;
+        }
+
+        // Cancel any pending request for this layer
+        if (this.pendingRequests.has(layerId)) {
+            this.pendingRequests.get(layerId).abort();
         }
 
         const controller = new AbortController();
         this.pendingRequests.set(layerId, controller);
 
-        const url = new URL(this.config.previewUrl, window.location.origin);
-        url.searchParams.append('layer_id', layerId);
-        url.searchParams.append('minx', bounds.getWest());
-        url.searchParams.append('miny', bounds.getSouth());
-        url.searchParams.append('maxx', bounds.getEast());
-        url.searchParams.append('maxy', bounds.getNorth());
-
-        const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
-        if (layerItem) {
-            layerItem.classList.add('layer-loading');
-        }
+        this.updateLayerStatus(layerId, 'loading');
 
         try {
-            const response = await fetch(url, {
-                signal: controller.signal,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+            const params = new URLSearchParams({
+                layer_id: layerId,
+                minx: bounds.getWest(),
+                miny: bounds.getSouth(),
+                maxx: bounds.getEast(),
+                maxy: bounds.getNorth()
             });
 
-            const data = await response.json();
-            this.pendingRequests.delete(layerId);
+            const response = await fetch(`${this.config.previewUrl}?${params}`, {
+                signal: controller.signal
+            });
 
-            if (layerItem) {
-                layerItem.classList.remove('layer-loading');
-            }
+            if (!response.ok) throw new Error('Failed to fetch preview');
+
+            const geojson = await response.json();
 
             // Remove existing preview
             if (this.previewLayers[layerId]) {
                 this.map.removeLayer(this.previewLayers[layerId]);
-                delete this.previewLayers[layerId];
             }
 
-            // Add features if any
-            if (data.features && data.features.length > 0) {
-                console.log(`Adding ${data.features.length} features for layer ${layerId}`);
-
-                const geoJsonLayer = L.geoJSON(data, {
-                    style: (feature) => this.getFeatureStyle(feature),
-                    pointToLayer: (feature, latlng) => this.createPointMarker(feature, latlng),
-                    onEachFeature: (feature, layer) => this.bindFeaturePopup(feature, layer)
+            // Add new preview
+            if (geojson.features && geojson.features.length > 0) {
+                const layer = L.geoJSON(geojson, {
+                    style: this.getLayerStyle(geojson.features[0]?.properties?.layer_type),
+                    pointToLayer: (feature, latlng) => {
+                        return L.circleMarker(latlng, {
+                            radius: 6,
+                            fillColor: this.getLayerColor(feature.properties?.layer_type),
+                            color: '#fff',
+                            weight: 2,
+                            fillOpacity: 0.8
+                        });
+                    },
+                    onEachFeature: (feature, layer) => {
+                        if (feature.properties) {
+                            let popup = `<strong>${feature.properties.layer_name || 'Feature'}</strong>`;
+                            if (feature.properties.layer_type) {
+                                popup += `<br>Type: ${feature.properties.layer_type}`;
+                            }
+                            layer.bindPopup(popup);
+                        }
+                    }
                 });
 
-                this.previewLayers[layerId] = geoJsonLayer;
-                geoJsonLayer.addTo(this.map);
-
-                this.updateLayerStatus(layerId, `${data.features.length} features`, 'success');
+                layer.addTo(this.map);
+                this.previewLayers[layerId] = layer;
+                this.updateLayerStatus(layerId, 'loaded', geojson.features.length);
             } else {
-                const message = data.message || 'No features in view';
-                this.updateLayerStatus(layerId, message, 'warning');
+                this.updateLayerStatus(layerId, 'empty');
             }
-
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log(`Request for layer ${layerId} was aborted`);
+            } else {
+                console.error(`Error loading layer ${layerId}:`, error);
+                this.updateLayerStatus(layerId, 'error');
+            }
+        } finally {
             this.pendingRequests.delete(layerId);
-
-            if (layerItem) {
-                layerItem.classList.remove('layer-loading');
-            }
-
-            if (error.name !== 'AbortError') {
-                console.error(`Failed to load preview for layer ${layerId}:`, error);
-                this.updateLayerStatus(layerId, 'Load error', 'error');
-            }
         }
     },
 
-    updateLayerStatus(layerId, message, type) {
-        const statusEl = document.querySelector(`#layer-status-${layerId}`);
-        if (statusEl) {
-            statusEl.textContent = message;
-            statusEl.className = `feature-count status-${type}`;
+    updateLayerStatus(layerId, status, featureCount = 0) {
+        this.layerStatus.set(layerId, { status, featureCount });
+
+        const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
+        if (!layerItem) return;
+
+        // Remove old status classes
+        layerItem.classList.remove('loading', 'error', 'empty');
+
+        // Update status indicator
+        let statusEl = layerItem.querySelector('.layer-status');
+        if (!statusEl) {
+            statusEl = document.createElement('span');
+            statusEl.className = 'layer-status';
+            layerItem.appendChild(statusEl);
+        }
+
+        switch (status) {
+            case 'loading':
+                layerItem.classList.add('loading');
+                statusEl.innerHTML = '<span class="spinner-sm"></span>';
+                break;
+            case 'loaded':
+                statusEl.textContent = featureCount > 0 ? `${featureCount}` : '';
+                break;
+            case 'empty':
+                layerItem.classList.add('empty');
+                statusEl.textContent = '0';
+                break;
+            case 'error':
+                layerItem.classList.add('error');
+                statusEl.textContent = '⚠';
+                break;
         }
     },
 
-    getFeatureStyle(feature) {
-        const layerName = (feature.properties?.layer_name || '').toLowerCase();
-
-        // Color scheme based on infrastructure type
-        if (layerName.includes('water') || layerName.includes('hydrant')) {
-            return { color: '#3b82f6', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('sewer') || layerName.includes('waste')) {
-            return { color: '#84cc16', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('storm') || layerName.includes('drain')) {
-            return { color: '#06b6d4', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('electric') || layerName.includes('power')) {
-            return { color: '#f59e0b', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('road') || layerName.includes('street')) {
-            return { color: '#6b7280', weight: 3, opacity: 0.8, fillOpacity: 0.2 };
-        }
-        return { color: '#8b5cf6', weight: 2, opacity: 0.7, fillOpacity: 0.3 };
+    getLayerStyle(type) {
+        const styles = {
+            polygon: { color: '#3388ff', weight: 2, fillOpacity: 0.3 },
+            polyline: { color: '#ff7800', weight: 3, fillOpacity: 0 },
+            point: { color: '#e74c3c', weight: 2, fillOpacity: 0.8 }
+        };
+        return styles[type] || styles.polygon;
     },
 
-    createPointMarker(feature, latlng) {
-        const style = this.getFeatureStyle(feature);
-        return L.circleMarker(latlng, {
-            radius: 6,
-            fillColor: style.color,
-            color: '#fff',
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8
-        });
-    },
-
-    bindFeaturePopup(feature, layer) {
-        const props = feature.properties || {};
-        let popupContent = '<div class="feature-popup">';
-        popupContent += `<h4>${props.layer_name || 'Feature'}</h4>`;
-
-        const excludeKeys = ['layer_name', 'layer_type', 'layer_id'];
-        Object.keys(props).forEach(key => {
-            if (!excludeKeys.includes(key) && props[key] !== null) {
-                const displayKey = key.replace(/_/g, ' ').toUpperCase();
-                popupContent += `<div><strong>${displayKey}:</strong> ${props[key]}</div>`;
-            }
-        });
-        popupContent += '</div>';
-
-        layer.bindPopup(popupContent, {
-            maxWidth: 300,
-            className: 'custom-popup'
-        });
+    getLayerColor(type) {
+        const colors = {
+            point: '#e74c3c',
+            polyline: '#ff7800',
+            polygon: '#3388ff'
+        };
+        return colors[type] || '#3388ff';
     },
 
     zoomToLayer(layerId, lat, lng) {
-        console.log(`Zooming to layer ${layerId} at ${lat}, ${lng}`);
-
-        // Check for null/invalid coordinates
-        if (!lat || !lng || lat === 'null' || lng === 'null' || lat === 'None' || lng === 'None') {
-            this.showToast('No location data for this layer', 'warning');
-            return;
-        }
-
-        lat = parseFloat(lat);
-        lng = parseFloat(lng);
-
-        if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-            this.showToast('Invalid coordinates for this layer', 'error');
-            return;
-        }
-
-        this.map.setView([lat, lng], 15, {
-            animate: true,
-            duration: 1.0
-        });
-
-        // Flash marker at location
-        const marker = L.circleMarker([lat, lng], {
-            radius: 12,
-            fillColor: '#ff7800',
-            color: '#fff',
-            weight: 3,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).addTo(this.map);
-
-        // Pulse effect
-        let pulseCount = 0;
-        const pulseInterval = setInterval(() => {
-            pulseCount++;
-            marker.setRadius(pulseCount % 2 === 0 ? 12 : 15);
-            if (pulseCount >= 6) {
-                clearInterval(pulseInterval);
-                setTimeout(() => this.map.removeLayer(marker), 500);
-            }
-        }, 300);
-
-        // Auto-activate layer
-        const checkbox = document.getElementById(`layer-${layerId}`);
-        if (checkbox && !checkbox.checked) {
-            checkbox.checked = true;
-            this.toggleLayer(layerId, checkbox);
+        if (lat && lng) {
+            this.map.flyTo([lat, lng], 15, { duration: 1 });
         }
     },
 
     updateActiveCount() {
         const count = this.activeLayers.size;
-        const countEl = document.getElementById('activeCount');
+        const countEl = document.getElementById('activeLayerCount');
+        const fab = document.getElementById('exportFab');
+
         if (countEl) {
-            countEl.textContent = count > 0 ? `(${count})` : '';
+            countEl.textContent = count;
+        }
+
+        if (fab) {
+            fab.style.display = count > 0 ? 'flex' : 'none';
         }
     },
 
     showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer') || this.createToastContainer();
+
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        toast.textContent = message;
-
-        let container = document.getElementById('toastContainer');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'toastContainer';
-            container.className = 'toast-container';
-            document.body.appendChild(container);
-        }
+        toast.innerHTML = `
+            <span class="toast-icon">${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}</span>
+            <span class="toast-message">${message}</span>
+        `;
 
         container.appendChild(toast);
 
@@ -414,6 +435,14 @@ const MapController = {
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
         }, 3000);
+    },
+
+    createToastContainer() {
+        const container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+        return container;
     },
 
     applyFilter(filterType, button) {
@@ -497,7 +526,6 @@ const MapController = {
             return;
         }
 
-        // Show loading
         this.showToast('Preparing download...', 'info');
 
         const formData = new FormData();
@@ -520,7 +548,6 @@ const MapController = {
                 const contentType = response.headers.get('content-type');
 
                 if (contentType && contentType.includes('application/dxf')) {
-                    // Handle DXF file download
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -533,12 +560,10 @@ const MapController = {
 
                     this.showToast('Download started successfully!', 'success');
                 } else {
-                    // Handle JSON error response
                     const data = await response.json();
                     const errorMsg = data.error || 'Export failed';
                     this.showToast(errorMsg, 'error');
 
-                    // Show detailed error if available
                     if (data.details) {
                         console.error('Export error details:', data.details);
                     }

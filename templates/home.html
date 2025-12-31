@@ -1,237 +1,680 @@
 {% extends "base.html" %}
 {% load static %}
-
-{% block title %}
-    <title>GIS Map - {{ request.user.username }}</title>
-{% endblock %}
-
 {% block extrahead %}
-<link rel="stylesheet" href="{% static 'css/home.css' %}">
-<!-- HTMX with extensions -->
-<script src="https://unpkg.com/htmx.org@2.0.0"></script>
-<script src="https://unpkg.com/htmx-ext-loading-states@2.0.0/loading-states.js"></script>
-<!-- Alpine.js for UI interactions -->
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-<!-- SweetAlert2 for confirmations -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Leaflet Geocoder -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css">
-<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-{% endblock %}
+     <link rel="stylesheet" href="{% static 'css/home.css' %}">
+{% endblock extrahead %}
 
 {% block content %}
-<!-- Map Container with data attributes for URLs -->
-<div id="map" 
-     data-export-url="{% url 'export_dxf_multi' %}"
-     data-layers-url="{% url 'layer_list' %}"
-     data-nearby-url="{% url 'nearby_layers' %}"
-     data-preview-url="{% url 'layer_preview_features' %}"
-{#     data-connects-url="{% url 'user_connects' %}"#}
-     data-csrf-token="{{ csrf_token }}">
+<!-- Map Container -->
+<div id="map"></div>
+
+<!-- No features message -->
+<div id="noFeaturesMessage" class="no-features-message">
+  No features in this area. Try zooming out or panning to a different location.
 </div>
 
-<!-- User Connects Badge -->
-{#<div class="connects-badge" id="connectsBadge">#}
-{#    <span class="connects-icon">💰</span>#}
-{#    <span class="connects-count" #}
-{#          hx-get="{% url 'user_connects' %}" #}
-{#          hx-trigger="load, connectsUpdated from:body"#}
-{#          hx-swap="innerHTML">#}
-{#        Loading...#}
-{#    </span>#}
-{#</div>#}
-
-<!-- Basemap Control -->
-<div class="basemap-control" id="basemapControl" style="margin-top: 50px;">
-    <div class="basemap-toggle" onclick="MapController.toggleBasemapMenu()">
-        <span>🗺️ Basemaps</span>
-    </div>
-    <div class="basemap-options" id="basemapOptions" style="display: none;">
-        <label class="basemap-option">
-            <input type="radio" name="basemap" value="osm" checked onchange="MapController.changeBasemap('osm')">
-            <span>🗺️ Streets</span>
-        </label>
-        <label class="basemap-option">
-            <input type="radio" name="basemap" value="satellite" onchange="MapController.changeBasemap('satellite')">
-            <span>🛰️ Satellite</span>
-        </label>
-        <label class="basemap-option">
-            <input type="radio" name="basemap" value="dark" onchange="MapController.changeBasemap('dark')">
-            <span>🌙 Dark</span>
-        </label>
-    </div>
+<!-- Basemap Control - BOTTOM LEFT (away from layers panel) -->
+<div class="basemap-control" id="basemapControl">
+  <div class="basemap-header" onclick="toggleBasemapOptions()">
+    <span>🗺️</span>
+    <span>Basemaps</span>
+    <span class="basemap-arrow">▼</span>
+  </div>
+  <div class="basemap-options" id="basemapOptions">
+    <label class="basemap-option">
+      <input type="radio" name="basemap" value="osm" checked>
+      <img src="https://a.tile.openstreetmap.org/9/238/307.png" alt="Streets">
+      <span>Streets</span>
+    </label>
+    <label class="basemap-option">
+      <input type="radio" name="basemap" value="terrain">
+      <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/9/307/238" alt="Terrain">
+      <span>Terrain</span>
+    </label>
+    <label class="basemap-option">
+      <input type="radio" name="basemap" value="dark">
+      <img src="https://a.basemaps.cartocdn.com/dark_all/9/238/307.png" alt="Dark">
+      <span>Dark Mode</span>
+    </label>
+  </div>
 </div>
 
-<!-- Layer Panel -->
-<div id="layerPanel" x-data="{ minimized: false }">
-    <div class="panel-header">
-        <h4>
-            <span>📦</span>
-            <span>Layers</span>
-            <span id="activeCount" class="layer-count"></span>
-        </h4>
-        <div class="panel-controls">
-            <button @click="minimized = !minimized" class="btn-control" title="Minimize">
-                <span x-text="minimized ? '➕' : '➖'"></span>
-            </button>
-            <button class="btn-control" 
-                    title="Refresh"
-                    onclick="MapController.refreshLayers()">
-                🔄
-            </button>
-        </div>
+<!-- Layer Control Panel - RIGHT SIDE -->
+<div id="layerPanel">
+  <div class="panel-header">
+    <h4>
+      <span>🗺️</span>
+      <span>Layers</span>
+      <span id="layerCount" style="font-size: 14px; font-weight: normal;"></span>
+    </h4>
+    <div class="panel-controls">
+      <button class="btn-control" onclick="toggleMinimize()" title="Minimize">
+        <span id="minimizeIcon">−</span>
+      </button>
+      <button class="btn-control" onclick="refreshLayers()" title="Refresh layers">
+        ↻
+      </button>
     </div>
-    
-    <div class="panel-content" x-show="!minimized" x-transition>
-        <!-- Search Box -->
-        <div class="search-box">
-            <input type="text" 
-                   id="layerSearch"
-                   placeholder="🔍 Search layers..." 
-                   name="search"
-                   hx-get="{% url 'layer_list' %}"
-                   hx-trigger="keyup changed delay:500ms"
-                   hx-target="#layerListContent"
-                   hx-indicator="#layerLoadingIndicator"
-                   class="search-input">
-        </div>
-        
-        <!-- Filter Buttons -->
-        <div class="filter-buttons">
-            <button class="filter-btn active"
-                    onclick="MapController.filterLayers('all', this)">
-                All
-            </button>
-            <button class="filter-btn"
-                    onclick="MapController.filterLayers('water', this)">
-                💧 Water
-            </button>
-            <button class="filter-btn"
-                    onclick="MapController.filterLayers('electric', this)">
-                ⚡ Electric
-            </button>
-            <button class="filter-btn"
-                    onclick="MapController.filterLayers('road', this)">
-                🛣️ Roads
-            </button>
-        </div>
-        
-        <!-- Layer List Container -->
-        <div id="layerList">
-            <div id="layerLoadingIndicator" class="htmx-indicator">
-                <div class="loading-spinner"></div>
-            </div>
-            <div id="layerListContent" 
-                 hx-get="{% url 'layer_list' %}" 
-                 hx-trigger="load"
-                 hx-ext="loading-states">
-                <!-- Layers will be loaded here -->
-            </div>
-        </div>
+  </div>
+
+  <div class="panel-content">
+    <!-- Search and Filter -->
+    <div class="search-filter-container">
+      <input type="text"
+             id="layerSearch"
+             class="search-input"
+             placeholder="Search layers..."
+             hx-get="{% url 'layer_list' %}"
+             hx-trigger="keyup changed delay:300ms"
+             hx-target="#layer-list"
+             hx-include="[name='filter']"
+             name="search">
+
+      <!-- Filter Buttons Row - WITH PREFERRED BUTTON -->
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="all" title="Show all layers">
+          <span class="filter-icon">📋</span>
+          <span class="filter-label">All</span>
+        </button>
+        <button class="filter-btn filter-preferred" data-filter="preferred" title="Show preferred/favorite layers">
+          <span class="filter-icon">⭐</span>
+          <span class="filter-label">Preferred</span>
+        </button>
+        <button class="filter-btn" data-filter="water" title="Water & Sewer layers">
+          <span class="filter-icon">💧</span>
+          <span class="filter-label">Water</span>
+        </button>
+        <button class="filter-btn" data-filter="electric" title="Electric & Power layers">
+          <span class="filter-icon">⚡</span>
+          <span class="filter-label">Electric</span>
+        </button>
+        <button class="filter-btn" data-filter="road" title="Road & Street layers">
+          <span class="filter-icon">🛣️</span>
+          <span class="filter-label">Road</span>
+        </button>
+      </div>
     </div>
+
+    <!-- Layer list loaded via HTMX -->
+    <div id="layer-list"
+         hx-get="{% url 'layer_list' %}"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <div class="spinner"></div>
+    </div>
+  </div>
 </div>
+
+<!-- Hidden form for map click -> nearby layers -->
+<form id="mapClickForm"
+      hx-get="{% url 'nearby_layers' %}"
+      hx-target="#nearbyContent"
+      hx-swap="innerHTML"
+      hx-trigger="submit"
+      style="display: none;">
+    <input type="hidden" id="clickLat" name="lat">
+    <input type="hidden" id="clickLng" name="lng">
+    <input type="hidden" id="selectedLayers" name="selected_layers">
+</form>
 
 <!-- Nearby Layers Sidebar -->
 <div id="nearbySidebar" class="nearby-sidebar">
-    <div class="sidebar-header">
-        <h5>
-            <span>📍</span>
-            <span>Nearby Layers</span>
-            <span id="nearbyCount" class="nearby-count"></span>
-        </h5>
-        <button onclick="MapController.closeNearbySidebar()" class="btn-close">✕</button>
+  <div class="sidebar-header">
+    <h5>📍 Nearby Layers</h5>
+    <button class="btn-close" onclick="MapController.closeNearbySidebar()">×</button>
+  </div>
+  <div id="nearbyContent" class="sidebar-content">
+    <div style="text-align: center; padding: 20px; color: #64748b;">
+      Click on the map to find nearby layers
     </div>
-    
-    <div class="sidebar-content">
-        <div id="nearbyContent" hx-ext="loading-states">
-            <!-- Nearby layers will be loaded here -->
-            <div class="empty-state">
-                <div class="empty-icon">🗺️</div>
-                <p>Click on the map to find nearby layers</p>
-            </div>
-        </div>
-    </div>
+  </div>
 </div>
 
-<!-- Toast Notifications Container -->
-<div id="toastContainer" class="toast-container"></div>
-
-<!-- Hidden Form for Map Clicks -->
-<form id="mapClickForm" 
-      hx-post="{% url 'nearby_layers' %}"
-      hx-target="#nearbyContent"
-      hx-swap="innerHTML"
-      hx-on::after-request="MapController.openNearbySidebar()"
-      style="display: none;">
-    {% csrf_token %}
-    <input type="hidden" name="lat" id="clickLat">
-    <input type="hidden" name="lng" id="clickLng">
-    <input type="hidden" name="selected_layers" id="selectedLayers">
-</form>
-
-<!-- Download Modal Result Container -->
-<div id="downloadResultModal" class="modal" style="display: none;">
-    <div class="modal-overlay" onclick="MapController.closeDownloadModal()"></div>
-    <div class="modal-content" id="downloadResultContent">
-        <!-- Download result will be loaded here -->
-    </div>
-</div>
+<!-- Export Floating Action Button -->
+<button id="exportFab" class="export-fab" onclick="MapController.downloadArea()" title="Export Selected Layers" style="display: none;">
+  <span>💾</span>
+  <span id="activeLayerCount">0</span>
+</button>
 
 {% endblock %}
 
 {% block extrascript %}
-<!-- Map Controller Script -->
+<!-- External map libraries -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-hash"></script>
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+<script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
+
+<!-- Alpine.js for reactive UI -->
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+<!-- HTMX for dynamic content -->
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+<!-- Your custom GIS application script -->
 <script src="{% static 'js/map-controller.js' %}"></script>
 
-<!-- Initialize Map with configuration -->
+<!-- Initialize the application -->
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Get configuration from data attributes
-        const mapEl = document.getElementById('map');
-        
-        const config = {
-            exportUrl: mapEl.dataset.exportUrl,
-            layersUrl: mapEl.dataset.layersUrl,
-            nearbyUrl: mapEl.dataset.nearbyUrl,
-            previewUrl: mapEl.dataset.previewUrl,
-            connectsUrl: mapEl.dataset.connectsUrl,
-            csrfToken: mapEl.dataset.csrfToken
-        };
-        
-        // Initialize map controller
-        MapController.init(config);
-        
-        // Listen for HTMX events
-        document.body.addEventListener('htmx:afterSwap', function(evt) {
-            MapController.handleHtmxAfterSwap(evt);
+// Configure HTMX to include CSRF token in all requests
+document.addEventListener('DOMContentLoaded', function() {
+    function getCsrfToken() {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'csrftoken') return value;
+        }
+        const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfInput) return csrfInput.value;
+        return '';
+    }
+
+    document.body.addEventListener('htmx:configRequest', function(evt) {
+        evt.detail.headers['X-CSRFToken'] = getCsrfToken();
+    });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize MapController with config
+    MapController.init({
+        csrfToken: '{{ csrf_token }}',
+        previewUrl: '{% url "layer_preview_features" %}',
+        exportUrl: '{% url "export_dxf_multi" %}',
+        nearbyUrl: '{% url "nearby_layers" %}'
+    });
+
+    // Handle basemap radio buttons
+    document.querySelectorAll('input[name="basemap"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            MapController.changeBasemap(e.target.value);
         });
     });
+
+    // Handle filter buttons (including preferred)
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            const filterType = this.dataset.filter;
+            const searchInput = document.getElementById('layerSearch');
+            const currentUrl = new URL(searchInput.getAttribute('hx-get'), window.location.origin);
+            currentUrl.searchParams.set('filter', filterType);
+            searchInput.setAttribute('hx-get', currentUrl.pathname + currentUrl.search);
+            htmx.trigger(searchInput, 'keyup');
+        });
+    });
+
+    // Show/hide export FAB based on active layers
+    setInterval(() => {
+        const fab = document.getElementById('exportFab');
+        const count = MapController.activeLayers ? MapController.activeLayers.size : 0;
+        if (fab) {
+            fab.style.display = count > 0 ? 'flex' : 'none';
+            document.getElementById('activeLayerCount').textContent = count;
+        }
+    }, 500);
+
+    // Open nearby sidebar when HTMX loads content
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target.id === 'nearbyContent') {
+            MapController.openNearbySidebar();
+        }
+    });
+});
+
+// Toggle basemap options panel
+function toggleBasemapOptions() {
+    const options = document.getElementById('basemapOptions');
+    const arrow = document.querySelector('.basemap-arrow');
+    options.classList.toggle('show');
+    arrow.textContent = options.classList.contains('show') ? '▲' : '▼';
+}
+
+// Close basemap when clicking outside
+document.addEventListener('click', function(e) {
+    const basemapControl = document.getElementById('basemapControl');
+    if (basemapControl && !basemapControl.contains(e.target)) {
+        document.getElementById('basemapOptions').classList.remove('show');
+        document.querySelector('.basemap-arrow').textContent = '▼';
+    }
+});
+
+// Helper functions for panel controls
+function toggleMinimize() {
+    const panel = document.getElementById('layerPanel');
+    const icon = document.getElementById('minimizeIcon');
+    panel.classList.toggle('minimized');
+    icon.textContent = panel.classList.contains('minimized') ? '+' : '−';
+}
+
+function refreshLayers() {
+    const layerList = document.getElementById('layer-list');
+    if (layerList) {
+        htmx.trigger(layerList, 'load');
+    }
+}
 </script>
 
-<!-- Expose toggleLayer and other functions for onclick handlers in partials -->
-<script>
-    // Bridge functions for onclick handlers in HTMX partials
-    window.toggleLayer = function(layerId, checkbox) {
-        MapController.toggleLayer(layerId, checkbox);
-    };
-    
-    window.zoomToLayer = function(layerId, lat, lng) {
-        MapController.zoomToLayer(layerId, lat, lng);
-    };
-    
-    window.downloadArea = function(layerId, lat, lng) {
-        MapController.downloadArea(layerId, lat, lng);
-    };
-    
-    window.downloadNearbyLayers = function() {
-        MapController.downloadNearbyLayers();
-    };
-    
-    window.updateNearbyCount = function() {
-        MapController.updateNearbyCount();
-    };
-</script>
+<style>
+/* ============================================
+   BASEMAP CONTROL - BOTTOM LEFT POSITION
+   Fixed: No longer overlaps with Layers panel
+   ============================================ */
+.basemap-control {
+    position: fixed !important;
+    bottom: 30px !important;
+    left: 10px !important;
+    top: auto !important;
+    right: auto !important;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 15px rgba(0,0,0,0.15);
+    z-index: 999;
+    min-width: 140px;
+    overflow: hidden;
+}
+
+.basemap-header {
+    padding: 12px 15px;
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.basemap-arrow {
+    margin-left: auto;
+    font-size: 10px;
+    transition: transform 0.2s;
+}
+
+.basemap-options {
+    display: none;
+    padding: 10px;
+    background: white;
+    border-top: 1px solid #e2e8f0;
+}
+
+.basemap-options.show {
+    display: block;
+}
+
+.basemap-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-bottom: 5px;
+}
+
+.basemap-option:last-child {
+    margin-bottom: 0;
+}
+
+.basemap-option:hover {
+    background: #f0fdfa;
+}
+
+.basemap-option input {
+    display: none;
+}
+
+.basemap-option img {
+    width: 45px;
+    height: 45px;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.basemap-option input:checked + img {
+    border-color: #0d9488;
+    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+}
+
+.basemap-option span {
+    font-size: 13px;
+    color: #334155;
+    font-weight: 500;
+}
+
+/* ============================================
+   LAYER PANEL - RIGHT SIDE
+   ============================================ */
+#layerPanel {
+    position: fixed !important;
+    top: 80px !important;
+    right: 10px !important;
+    left: auto !important;
+    bottom: auto !important;
+    width: 340px;
+    max-height: calc(100vh - 100px);
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#layerPanel.minimized .panel-content {
+    display: none;
+}
+
+.panel-header {
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.filter-btn {
+    color:black !important;
+}
+
+
+.panel-header h4 {
+    margin: 0;
+    color: white;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-controls {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-control {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-control:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+.panel-content {
+    padding: 15px;
+    overflow-y: auto;
+    max-height: calc(100vh - 200px);
+}
+
+/* ============================================
+   SEARCH AND FILTER BUTTONS
+   ============================================ */
+.search-filter-container {
+    margin-bottom: 15px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-size: 14px;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+}
+
+.search-input::placeholder {
+    color: rgba(255,255,255,0.6);
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.15);
+}
+
+/* Filter Buttons - Responsive Layout */
+.filter-buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 8px 12px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 20px;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.filter-btn .filter-icon {
+    font-size: 14px;
+}
+
+.filter-btn .filter-label {
+    font-weight: 500;
+}
+
+.filter-btn:hover {
+    background: rgba(255,255,255,0.2);
+    transform: translateY(-1px);
+}
+
+.filter-btn.active {
+    background: rgb(246, 115, 61);
+    border-color: rgba(255,255,255,0.5);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* ⭐ PREFERRED FILTER - Special Gold Styling */
+.filter-btn.filter-preferred {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.3) 0%, rgba(245, 158, 11, 0.3) 100%);
+    border-color: rgba(251, 191, 36, 0.5);
+}
+
+.filter-btn.filter-preferred:hover {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.4) 0%, rgba(245, 158, 11, 0.4) 100%);
+}
+
+.filter-btn.filter-preferred.active {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.5) 0%, rgba(245, 158, 11, 0.5) 100%);
+    border-color: #fbbf24;
+    box-shadow: 0 2px 10px rgba(251, 191, 36, 0.3);
+}
+
+/* ============================================
+   NEARBY SIDEBAR - LEFT SIDE
+   ============================================ */
+.nearby-sidebar {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    width: 350px;
+    height: calc(100vh - 70px);
+    background: white;
+    box-shadow: 2px 0 15px rgba(0,0,0,0.1);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+}
+
+.nearby-sidebar.open {
+    transform: translateX(0);
+}
+
+.sidebar-header {
+    padding: 15px 20px;
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-header h5 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.sidebar-header .btn-close {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-header .btn-close:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+/* ============================================
+   EXPORT FAB - BOTTOM RIGHT
+   ============================================ */
+.export-fab {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: auto;
+    min-width: 60px;
+    height: 60px;
+    padding: 0 20px;
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    color: white;
+    border: none;
+    border-radius: 30px;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(13, 148, 136, 0.4);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.export-fab:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(13, 148, 136, 0.5);
+}
+
+/* ============================================
+   UTILITIES
+   ============================================ */
+.spinner {
+    width: 40px;
+    height: 40px;
+    margin: 40px auto;
+    border: 3px solid rgba(255,255,255,0.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.no-features-message {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fef3c7;
+    color: #92400e;
+    padding: 15px 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    z-index: 1000;
+    font-size: 14px;
+}
+
+/* Preferred layer highlight in list */
+.layer-preferred {
+    border-left: 3px solid #fbbf24 !important;
+    background: linear-gradient(90deg, rgba(251, 191, 36, 0.15) 0%, transparent 40%) !important;
+}
+
+.preferred-badge {
+    font-size: 12px;
+    margin-left: 5px;
+    color: #f59e0b;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+    #layerPanel {
+        width: 300px;
+        right: 5px;
+        top: 75px !important;
+    }
+
+    .nearby-sidebar {
+        width: 100%;
+    }
+
+    .basemap-control {
+        bottom: 90px !important;
+    }
+
+    .export-fab {
+        bottom: 20px;
+        right: 20px;
+    }
+
+    /* Hide filter labels on small screens, keep icons */
+    .filter-btn .filter-label {
+        display: none;
+    }
+
+    .filter-btn {
+        padding: 8px 10px;
+    }
+}
+</style>
 {% endblock %}

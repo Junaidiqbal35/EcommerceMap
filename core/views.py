@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from django.conf import settings
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse
@@ -12,7 +14,7 @@ from typing import List, Dict, Any, Optional
 from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 from django.core.cache import cache
-from .models import Layer,  DownloadRecord
+from .models import Layer, DownloadRecord, UserLayerPreference
 from .gda2020_converter import GDA2020Converter
 
 from django.contrib.gis.geos import (
@@ -40,6 +42,49 @@ TEXT_OFFSET_X = 1.2
 TEXT_OFFSET_Y = 1.2
 DECIMAL = 3
 
+
+@login_required
+@require_GET
+def all_layers(request):
+    """
+    Return all layers with basic information as JSON.
+    Includes user's preferred layers for highlighting.
+    """
+    layers = Layer.objects.select_related('server').filter(
+        server__isnull=False
+    ).order_by('server__name', 'name')
+
+    # Get user's preferred layer IDs
+    preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+
+    data = []
+    for layer in layers:
+        # Get centroid if geometry exists
+        centroid_lat = centroid_lng = None
+        if layer.geometry:
+            try:
+                centroid = layer.geometry.centroid
+                # Ensure coordinates are within valid range
+                if -90 <= centroid.y <= 90 and -180 <= centroid.x <= 180:
+                    centroid_lat = centroid.y
+                    centroid_lng = centroid.x
+            except:
+                pass
+
+        data.append({
+            'id': layer.layer_id,
+            'name': layer.name,
+            'type': layer.type,
+            'server_name': layer.server.name if layer.server else 'Unknown',
+            'centroid_lat': centroid_lat,
+            'centroid_lng': centroid_lng,
+            'is_preferred': layer.layer_id in preferred_layer_ids,  # NEW
+        })
+
+    return JsonResponse({
+        'layers': data,
+        'preferred_layer_ids': preferred_layer_ids,  # NEW
+    })
 
 def create_session_with_retries(max_retries=3):
     """Create a requests session with retry strategy"""
@@ -154,10 +199,19 @@ def parse_esri_geometry(geom_dict: Dict, srid: int = 4326) -> Optional[GEOSGeome
 
     return None
 
+
 @login_required
 def home(request):
-    """Main map page"""
-    return render(request, "home.html")
+    """
+    Main map page - FIXED to pass preferred_layer_ids to template.
+    This enables auto-selection of user's preferred layers on page load.
+    """
+    # Get user's preferred layer IDs
+    preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+
+    return render(request, "home.html", {
+        'preferred_layer_ids': json.dumps(preferred_layer_ids),
+    })
 
 
 @login_required
@@ -173,64 +227,168 @@ def user_connects(request):
 @login_required
 @require_GET
 def layer_list(request):
-    """Return filtered layer list"""
+    """
+    Return filtered layer list with user preferences.
+    Supports search, type filter, and 'preferred' filter.
+    """
     search = request.GET.get('search', '').strip()
-    filter_type = request.GET.get('filter', 'all')
+    filter_type = request.GET.get('filter', 'all').lower()
 
-    # Base queryset
-    layers = Layer.objects.select_related('server').filter(
-        server__isnull=False
-    )
+    # Get user's preferred layer IDs
+    preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
 
-    # Apply search
+    # Start with all layers
+    layers = Layer.objects.select_related('server').all()
+
+    # Apply search filter
     if search:
-        layers = layers.filter(
-            Q(name__icontains=search) |
-            Q(server__name__icontains=search)
-        )
+        layers = layers.filter(name__icontains=search)
 
-    # Apply filter
-    if filter_type == 'water':
-        layers = layers.filter(
-            Q(name__icontains='water') |
-            Q(name__icontains='sewer') |
-            Q(name__icontains='hydrant') |
-            Q(name__icontains='valve') |
-            Q(name__icontains='storm')
-        )
+    # Apply type/category filters
+    if filter_type == 'preferred':
+        # Show only preferred layers
+        if preferred_layer_ids:
+            layers = layers.filter(layer_id__in=preferred_layer_ids)
+        else:
+            layers = layers.none()
+    elif filter_type == 'water':
+        layers = layers.filter(name__icontains='WAT') | layers.filter(name__icontains='SEW')
     elif filter_type == 'electric':
-        layers = layers.filter(
-            Q(name__icontains='electric') |
-            Q(name__icontains='power') |
-            Q(name__icontains='pole') |
-            Q(name__icontains='light')
-        )
+        layers = layers.filter(name__icontains='ELEC')
     elif filter_type == 'road':
-        layers = layers.filter(
-            Q(name__icontains='road') |
-            Q(name__icontains='street') |
-            Q(name__icontains='footpath') |
-            Q(name__icontains='kerb') |
-            Q(name__icontains='pavement')
-        )
+        layers = layers.filter(name__icontains='ROAD') | layers.filter(name__icontains='STREET')
+    elif filter_type == 'contour':
+        layers = layers.filter(name__icontains='CONTOUR')
 
-    # Limit and group
-    layers = layers[:150]
-
-    grouped_layers = {}
+    # Group by server
+    grouped_layers = defaultdict(list)
     for layer in layers:
         server_name = layer.server.name if layer.server else 'Unknown'
-        if server_name not in grouped_layers:
-            grouped_layers[server_name] = []
         grouped_layers[server_name].append(layer)
+
+    # Sort servers alphabetically
+    grouped_layers = dict(sorted(grouped_layers.items()))
 
     return TemplateResponse(request, 'partials/layer_list.html', {
         'grouped_layers': grouped_layers,
-        'layers': layers,
+        'preferred_layer_ids': preferred_layer_ids,
+        'filter_type': filter_type,
         'search': search,
-        'filter_type': filter_type
+        'total_count': layers.count(),
     })
 
+
+# ==============================================================================
+# 3. REPLACE the log_export_records() function (around line 1310) with this:
+# ==============================================================================
+
+def log_export_records(user, layers, lat, lng):
+    """Log download records and update user layer preferences"""
+
+    records = []
+    for layer in layers:
+        records.append(DownloadRecord(
+            user=user,
+            layer=layer,
+            latitude=lat,
+            longitude=lng
+        ))
+
+    # Bulk create download records for efficiency
+    DownloadRecord.objects.bulk_create(records, ignore_conflicts=True)
+
+    # Update user layer preferences (track frequently downloaded layers)
+    for layer in layers:
+        UserLayerPreference.update_preference(user, layer)
+
+
+# ==============================================================================
+# 4. ADD these new view functions (optional - for managing preferences)
+# ==============================================================================
+
+@login_required
+@require_GET
+def user_layer_preferences(request):
+    """
+    API endpoint to get user's preferred layer IDs.
+    Used by JavaScript to initialize preferred layers on page load.
+    """
+    preferred_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+
+    # Optionally include layer details
+    include_details = request.GET.get('details', 'false').lower() == 'true'
+
+    if include_details:
+        preferences = UserLayerPreference.objects.filter(
+            user=request.user
+        ).select_related('layer', 'layer__server').order_by('-download_count')[:50]
+
+        return JsonResponse({
+            'success': True,
+            'preferred_ids': preferred_ids,
+            'preferences': [
+                {
+                    'layer_id': p.layer_id,
+                    'layer_name': p.layer.name,
+                    'server_name': p.layer.server.name if p.layer.server else 'Unknown',
+                    'download_count': p.download_count,
+                    'is_favorite': p.is_favorite,
+                    'last_used': p.last_used.isoformat(),
+                }
+                for p in preferences
+            ]
+        })
+
+    return JsonResponse({
+        'success': True,
+        'preferred_ids': preferred_ids,
+    })
+
+
+@login_required
+@require_POST
+def clear_layer_preferences(request):
+    """Clear all layer preferences for the current user."""
+    deleted_count, _ = UserLayerPreference.objects.filter(user=request.user).delete()
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Cleared {deleted_count} layer preferences',
+        'deleted_count': deleted_count,
+    })
+
+
+@login_required
+@require_POST
+def toggle_layer_favorite(request, layer_id):
+    """Toggle favorite status for a specific layer."""
+    is_favorite = UserLayerPreference.toggle_favorite(request.user, layer_id)
+
+    return JsonResponse({
+        'success': True,
+        'layer_id': layer_id,
+        'is_favorite': is_favorite,
+    })
+
+
+def log_export_records(user, layers, lat=None, lng=None):
+    """
+    Log download records and update user preferences.
+    Called by export_dxf_multi after successful export.
+    """
+    for layer in layers:
+        # Create download record
+        DownloadRecord.objects.create(
+            user=user,
+            layer=layer,
+            latitude=lat,
+            longitude=lng
+        )
+
+        # Update user preference (increment download count)
+        UserLayerPreference.update_preference(user, layer)
+
+    logger.info(f"Logged {len(layers)} downloads for user {user.username}")
 
 @login_required
 def layer_preview_features(request):
@@ -1435,48 +1593,42 @@ def layer_status_check(request):
         'layer_id': layer_id
     })
 
-@login_required
-@require_POST
-def nearby_layers(request):
-    """Find nearby layers based on click location"""
-    try:
-        lat = float(request.POST.get('lat', 0))
-        lng = float(request.POST.get('lng', 0))
-        selected_layers = request.POST.get('selected_layers', '').split(',')
-        selected_layers = [l for l in selected_layers if l]
 
-    except (ValueError, TypeError) as e:
-        return TemplateResponse(request, 'partials/nearby_layers.html', {
-            'error': 'Invalid coordinates provided'
+@login_required
+def nearby_layers(request):
+    """Return layers near a point."""
+    try:
+        lat = float(request.GET.get('lat'))
+        lng = float(request.GET.get('lng'))
+        dist = float(request.GET.get('dist', 2000))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Invalid coordinates'}, status=400)
+
+    from django.contrib.gis.geos import Point
+    from django.contrib.gis.db.models.functions import Distance
+
+    point = Point(lng, lat, srid=4326)
+    preferred_ids = set(UserLayerPreference.get_preferred_layer_ids(request.user))
+
+    layers = Layer.objects.annotate(
+        distance=Distance('geometry', point)
+    ).filter(
+        distance__lte=dist,
+        geometry__isnull=False
+    ).select_related('server').order_by('distance')[:20]
+
+    data = []
+    for layer in layers:
+        data.append({
+            'id': layer.layer_id,
+            'name': layer.name,
+            'type': layer.type,
+            'server_name': layer.server.name if layer.server else 'Unknown',
+            'distance_m': round(layer.distance.m, 1) if layer.distance else 0,
+            'is_preferred': layer.layer_id in preferred_ids,
         })
 
-    # Get candidate layers
-    candidates = get_candidate_layers(lat, lng, selected_layers)
-
-    # Calculate distances
-    layers_with_distance = []
-    for layer in candidates:
-        distance = calculate_mock_distance(lat, lng, layer)
-        if distance < 2000:  # Within 2km
-            layers_with_distance.append({
-                'layer': layer,
-                'distance': distance,
-                'features': 10  # Mock for now
-            })
-
-    # Sort by distance
-    layers_with_distance.sort(key=lambda x: x['distance'])
-
-    context = {
-        'lat': lat,
-        'lng': lng,
-        'layers': layers_with_distance[:20],
-        'user_connects': getattr(request.user, 'connects', 0),
-        'selected_context': get_selection_context(selected_layers)
-    }
-
-    return TemplateResponse(request, 'partials/nearby_layers.html', context)
-
+    return JsonResponse(data, safe=False)
 
 @login_required
 def check_connects(request):

@@ -1,157 +1,220 @@
-<div class="nearby-container">
-    <!-- Location Info -->
-    <div class="location-info">
-        <div class="location-header">
-            <span class="location-icon">📍</span>
-            <span>Clicked Location</span>
-        </div>
-        <div class="location-coords">
-            Lat: {{ lat|floatformat:5 }}, Lng: {{ lng|floatformat:5 }}
-        </div>
-        {% if selected_context %}
-        <div class="location-context">
-            Showing {{ selected_context }} related layers
-        </div>
-        {% endif %}
-    </div>
-    
-    {% if error %}
-    <div class="error-state">
-        <div class="error-icon">⚠️</div>
-        <h3>Error</h3>
-        <p>{{ error }}</p>
-    </div>
-    {% elif not layers %}
-    <div class="empty-state">
-        <div class="empty-icon">🔍</div>
-        <h3>No Layers Found</h3>
-        <p>No layers with features found within 2km of this location</p>
-        <button class="btn-secondary" onclick="map.setView([{{ lat }}, {{ lng }}], map.getZoom() + 1)">
-            Zoom In & Try Again
-        </button>
-    </div>
-    {% else %}
-    
-    <!-- Nearby Layers Form -->
-    <form id="nearbyDownloadForm">
-        {% csrf_token %}
-        <input type="hidden" name="lat" value="{{ lat }}">
-        <input type="hidden" name="lng" value="{{ lng }}">
-        
-        <!-- All layers in one list -->
-        <div class="nearby-layers-list">
-            {% for item in layers %}
-            <div class="nearby-layer-item">
-                <label class="nearby-layer-label">
-                    <input type="checkbox" 
-                           name="layer_ids[]" 
-                           value="{{ item.layer.layer_id }}"
-                           checked
-                           onchange="updateNearbyCount()">
-                    <div class="nearby-layer-info">
-                        <div class="nearby-layer-name">
-                            <span class="layer-icon">
-                                {% if 'water' in item.layer.name|lower %}💧
-                                {% elif 'sewer' in item.layer.name|lower %}🚰
-                                {% elif 'electric' in item.layer.name|lower %}⚡
-                                {% elif 'road' in item.layer.name|lower %}🛣️
-                                {% else %}📍{% endif %}
-                            </span>
-                            {{ item.layer.name }}
-                        </div>
-                        <div class="nearby-layer-meta">
-                            <span class="distance-badge" style="background: {% if item.distance < 100 %}#10b98120; color: #10b981{% elif item.distance < 500 %}#f59e0b20; color: #f59e0b{% else %}#6b728020; color: #6b7280{% endif %};">
-                                {{ item.distance }}m
-                            </span>
-                            <span class="features">{{ item.features }} features</span>
-                            <span class="server">{{ item.layer.server.name }}</span>
-                        </div>
-                    </div>
-                </label>
-            </div>
-            {% endfor %}
-        </div>
-        
-        <!-- Download Summary -->
-        <div class="download-summary">
-            <div class="summary-row">
-                <span>Selected Layers:</span>
-                <span id="selectedCount">{{ layers|length }}</span>
-            </div>
-            <div class="summary-row">
-                <span>Connect Cost:</span>
-                <span class="cost-value" id="connectCost">{{ layers|length }}</span>
-            </div>
-            <div class="summary-row">
-                <span>Your Connects:</span>
-                <span class="connects-value">{{ user_connects }}</span>
-            </div>
-            <div class="summary-row total">
-                <span>After Download:</span>
-                <span class="{% if user_connects >= layers|length %}success{% else %}error{% endif %}" id="remainingConnects">
-                    {% if user_connects >= layers|length %}
-                        {{ user_connects|add:"-"|add:layers|length }}
-                    {% else %}
-                        Insufficient
-                    {% endif %}
-                </span>
-            </div>
-        </div>
-        
-        <!-- Action Buttons -->
-        <div class="action-buttons">
-            <button type="button" 
-                    class="btn-secondary"
-                    onclick="document.querySelectorAll('#nearbyDownloadForm input[type=checkbox]').forEach(cb => cb.checked = !cb.checked); updateNearbyCount();">
-                Toggle All
-            </button>
-            
-            <button type="button" 
-                    class="btn-primary download-btn"
-                    onclick="downloadNearbyLayers()"
-                    {% if user_connects < layers|length %}disabled{% endif %}>
-                {% if user_connects >= layers|length %}
-                    💾 Download Selected
-                {% else %}
-                    ⚠️ Insufficient Connects
-                {% endif %}
-            </button>
-        </div>
-    </form>
-    {% endif %}
+{% comment %}
+Nearby Layers Template - Displays layers found near a clicked map location
+{% endcomment %}
+
+{% if error %}
+<div class="nearby-error">
+  <span>⚠️</span>
+  <p>{{ error }}</p>
+</div>
+{% elif layers %}
+<div class="nearby-info">
+  <p>Found <strong>{{ layers|length }}</strong> layers within 2km</p>
+  <p class="coords">📍 {{ lat|floatformat:5 }}, {{ lng|floatformat:5 }}</p>
 </div>
 
-<script>
-// Update count and button state
-function updateNearbyCount() {
-    const checked = document.querySelectorAll('#nearbyDownloadForm input[type="checkbox"]:checked').length;
-    const userConnects = {{ user_connects }};
-    
-    document.getElementById('selectedCount').textContent = checked;
-    document.getElementById('connectCost').textContent = checked;
-    document.getElementById('nearbyCount').textContent = checked > 0 ? `(${checked})` : '';
-    
-    const remaining = userConnects - checked;
-    const remainingEl = document.getElementById('remainingConnects');
-    remainingEl.textContent = remaining >= 0 ? remaining : 'Insufficient';
-    remainingEl.className = remaining >= 0 ? 'success' : 'error';
-    
-    // Update button
-    const btn = document.querySelector('.download-btn');
-    if (btn) {
-        if (checked === 0) {
-            btn.textContent = 'Select Layers';
-            btn.disabled = true;
-        } else if (userConnects < checked) {
-            btn.textContent = '⚠️ Insufficient Connects';
-            btn.disabled = true;
-        } else {
-            btn.textContent = `💾 Download ${checked} Layer${checked > 1 ? 's' : ''}`;
-            btn.disabled = false;
-        }
-    }
-}
+<form id="nearbyDownloadForm">
+  {% csrf_token %}
+  <input type="hidden" name="lat" value="{{ lat }}">
+  <input type="hidden" name="lng" value="{{ lng }}">
+  
+  <div class="nearby-layers-list">
+    {% for item in layers %}
+    <div class="nearby-layer-item {% if item.layer.is_preferred %}preferred{% endif %}">
+      <label>
+        <input type="checkbox" 
+               name="layer_ids[]" 
+               value="{{ item.layer.layer_id }}"
+               onchange="updateNearbyCount()"
+               checked>
+        <div class="layer-info">
+          <div class="layer-name">
+            {% if item.layer.type == 'point' %}📍{% elif item.layer.type == 'polyline' %}📏{% else %}🔷{% endif %}
+            {{ item.layer.name }}
+            {% if item.layer.is_preferred %}<span class="preferred-badge">★</span>{% endif %}
+          </div>
+          <div class="layer-meta">
+            <span class="distance">{{ item.distance|floatformat:0 }}m</span>
+            <span class="server">{{ item.layer.server.name }}</span>
+            <span class="type">{{ item.layer.type }}</span>
+          </div>
+        </div>
+      </label>
+    </div>
+    {% endfor %}
+  </div>
+  
+  <div class="nearby-actions">
+    <div class="action-info">
+      <span id="nearbyCount">({{ layers|length }})</span> layers selected
+      <span class="connects-info">• You have {{ user_connects }} connects</span>
+    </div>
+    <button type="button" 
+            class="btn-download"
+            onclick="downloadNearbyLayers()">
+      <span>💾</span> Download Selected
+    </button>
+  </div>
+</form>
 
-// Initialize on load
-updateNearbyCount();
-</script>
+<style>
+.nearby-info {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+.nearby-info p {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  color: #1e293b;
+}
+.nearby-info .coords {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+.nearby-layers-list {
+  max-height: calc(100vh - 350px);
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+.nearby-layer-item {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s;
+}
+.nearby-layer-item:hover {
+  background: #f1f5f9;
+  border-color: rgb(102, 126, 234);
+}
+.nearby-layer-item.preferred {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+.nearby-layer-item label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  margin: 0;
+}
+.nearby-layer-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: rgb(102, 126, 234);
+}
+.layer-info {
+  flex: 1;
+}
+.layer-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.preferred-badge {
+  color: #f59e0b;
+  font-size: 12px;
+}
+.layer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+.layer-meta span {
+  background: rgba(0,0,0,0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.layer-meta .distance {
+  color: #059669;
+  font-weight: 500;
+}
+.nearby-actions {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding: 16px 0 0 0;
+  border-top: 1px solid #e2e8f0;
+}
+.action-info {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 12px;
+}
+.connects-info {
+  color: #059669;
+}
+.btn-download {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, rgb(102, 126, 234) 0%, rgb(118, 75, 162) 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+.btn-download:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+.nearby-error {
+  text-align: center;
+  padding: 30px 20px;
+  color: #dc2626;
+}
+.nearby-error span {
+  font-size: 40px;
+  display: block;
+  margin-bottom: 10px;
+}
+</style>
+
+{% else %}
+<div class="nearby-empty">
+  <span>🔍</span>
+  <p>No layers found within 2km of this location</p>
+  <p class="hint">Try clicking in a different area</p>
+</div>
+
+<style>
+.nearby-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #64748b;
+}
+.nearby-empty span {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 16px;
+}
+.nearby-empty p {
+  margin: 0;
+  font-size: 15px;
+}
+.nearby-empty .hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+</style>
+{% endif %}

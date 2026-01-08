@@ -47,6 +47,12 @@ class Layer(models.Model):
 
     class Meta:
         ordering = ['server__name', 'name']
+        indexes = [
+            models.Index(fields=['server', 'name']),
+            models.Index(fields=['type']),
+            models.Index(fields=['name']),
+            models.Index(fields=['server', 'type']),
+        ]
 
     def get_extent(self):
         if self.geometry:

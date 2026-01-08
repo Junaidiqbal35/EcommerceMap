@@ -1,220 +1,179 @@
 {% comment %}
 Nearby Layers Template - Displays layers found near a clicked map location
+Place this in templates/partials/nearby_layers.html
 {% endcomment %}
 
 {% if error %}
 <div class="nearby-error">
-  <span>⚠️</span>
-  <p>{{ error }}</p>
+    <div class="error-icon">⚠️</div>
+    <p class="error-message">{{ error }}</p>
 </div>
+
 {% elif layers %}
-<div class="nearby-info">
-  <p>Found <strong>{{ layers|length }}</strong> layers within 2km</p>
-  <p class="coords">📍 {{ lat|floatformat:5 }}, {{ lng|floatformat:5 }}</p>
+<div class="nearby-wrapper">
+    <!-- Location Info -->
+    <div class="location-card">
+        <div class="location-icon">📍</div>
+        <div class="location-details">
+            <div class="location-count">Found <strong>{{ layers|length }}</strong> layers within 2km</div>
+            <div class="location-coords">{{ lat|floatformat:5 }}, {{ lng|floatformat:5 }}</div>
+        </div>
+    </div>
+
+    <!-- Layers Form -->
+    <form id="nearbyDownloadForm" class="nearby-form">
+        {% csrf_token %}
+        <input type="hidden" name="lat" value="{{ lat }}">
+        <input type="hidden" name="lng" value="{{ lng }}">
+        
+        <!-- Select All Toggle -->
+        <div class="select-all-row">
+            <label class="select-all-label">
+                <input type="checkbox" 
+                       id="selectAllNearby" 
+                       checked 
+                       onchange="toggleAllNearbyLayers(this)">
+                <span>Select All</span>
+            </label>
+            <span class="layer-count-badge" id="nearbySelectedCount">{{ layers|length }}</span>
+        </div>
+
+        <!-- Layers List -->
+        <div class="nearby-layers-list">
+            {% for item in layers %}
+            <div class="nearby-layer-card {% if item.is_preferred %}preferred{% endif %}">
+                <label class="nearby-layer-label">
+                    <input type="checkbox" 
+                           name="layer_ids[]" 
+                           value="{{ item.layer.layer_id }}"
+                           class="nearby-checkbox"
+                           onchange="updateNearbyCount()"
+                           checked>
+                    <div class="nearby-layer-content">
+                        <div class="nearby-layer-header">
+                            <span class="layer-type-icon">
+                                {% if item.layer.type == 'point' %}📍{% elif item.layer.type == 'polyline' %}📏{% else %}🔷{% endif %}
+                            </span>
+                            <span class="nearby-layer-name">{{ item.layer.name }}</span>
+                            {% if item.is_preferred %}<span class="star-badge">★</span>{% endif %}
+                        </div>
+                        <div class="nearby-layer-meta">
+                            <span class="distance-pill">
+                                <span class="distance-icon">📐</span>
+                                {{ item.distance|floatformat:0 }}m
+                            </span>
+                            <span class="server-pill">{{ item.layer.server.name }}</span>
+                            <span class="type-pill">{{ item.layer.type }}</span>
+                        </div>
+                    </div>
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Download Actions -->
+        <div class="nearby-actions">
+            <div class="connects-info-bar">
+                <div class="selected-info">
+                    <span class="selected-count" id="nearbyCountDisplay">{{ layers|length }}</span> 
+                    <span>layers selected</span>
+                </div>
+                <div class="connects-balance">
+                    <span class="connects-icon">💰</span>
+                    <span>{{ user_connects }} connects</span>
+                </div>
+            </div>
+            
+            <button type="button" 
+                    class="btn-download-nearby"
+                    onclick="downloadNearbyLayers()"
+                    id="btnDownloadNearby">
+                <span class="btn-icon">💾</span>
+                <span class="btn-text">Download Selected</span>
+            </button>
+        </div>
+    </form>
 </div>
 
-<form id="nearbyDownloadForm">
-  {% csrf_token %}
-  <input type="hidden" name="lat" value="{{ lat }}">
-  <input type="hidden" name="lng" value="{{ lng }}">
-  
-  <div class="nearby-layers-list">
-    {% for item in layers %}
-    <div class="nearby-layer-item {% if item.layer.is_preferred %}preferred{% endif %}">
-      <label>
-        <input type="checkbox" 
-               name="layer_ids[]" 
-               value="{{ item.layer.layer_id }}"
-               onchange="updateNearbyCount()"
-               checked>
-        <div class="layer-info">
-          <div class="layer-name">
-            {% if item.layer.type == 'point' %}📍{% elif item.layer.type == 'polyline' %}📏{% else %}🔷{% endif %}
-            {{ item.layer.name }}
-            {% if item.layer.is_preferred %}<span class="preferred-badge">★</span>{% endif %}
-          </div>
-          <div class="layer-meta">
-            <span class="distance">{{ item.distance|floatformat:0 }}m</span>
-            <span class="server">{{ item.layer.server.name }}</span>
-            <span class="type">{{ item.layer.type }}</span>
-          </div>
-        </div>
-      </label>
-    </div>
-    {% endfor %}
-  </div>
-  
-  <div class="nearby-actions">
-    <div class="action-info">
-      <span id="nearbyCount">({{ layers|length }})</span> layers selected
-      <span class="connects-info">• You have {{ user_connects }} connects</span>
-    </div>
-    <button type="button" 
-            class="btn-download"
-            onclick="downloadNearbyLayers()">
-      <span>💾</span> Download Selected
-    </button>
-  </div>
-</form>
+<script>
+function toggleAllNearbyLayers(checkbox) {
+    const checkboxes = document.querySelectorAll('.nearby-checkbox');
+    checkboxes.forEach(cb => cb.checked = checkbox.checked);
+    updateNearbyCount();
+}
 
-<style>
-.nearby-info {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  border: 1px solid rgba(102, 126, 234, 0.2);
+function updateNearbyCount() {
+    const checked = document.querySelectorAll('.nearby-checkbox:checked').length;
+    const total = document.querySelectorAll('.nearby-checkbox').length;
+    
+    document.getElementById('nearbySelectedCount').textContent = checked;
+    document.getElementById('nearbyCountDisplay').textContent = checked;
+    document.getElementById('selectAllNearby').checked = (checked === total);
+    
+    // Disable download button if none selected
+    const btn = document.getElementById('btnDownloadNearby');
+    if (btn) {
+        btn.disabled = checked === 0;
+    }
 }
-.nearby-info p {
-  margin: 0 0 4px 0;
-  font-size: 14px;
-  color: #1e293b;
+
+function downloadNearbyLayers() {
+    const form = document.getElementById('nearbyDownloadForm');
+    const formData = new FormData(form);
+    const btn = document.getElementById('btnDownloadNearby');
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-small"></span> Downloading...';
+    
+    fetch('/export-dxf-multi/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || 'Download failed');
+            });
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        // Trigger download
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'nearby_layers_' + new Date().toISOString().slice(0,10) + '.dxf';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+        
+        // Show success and close sidebar
+        if (window.mapController) {
+            window.mapController.showToast('Download started!', 'success');
+            window.mapController.closeSidebar();
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error.message);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">💾</span><span class="btn-text">Download Selected</span>';
+    });
 }
-.nearby-info .coords {
-  font-size: 12px;
-  color: #64748b;
-  margin: 0;
-}
-.nearby-layers-list {
-  max-height: calc(100vh - 350px);
-  overflow-y: auto;
-  margin-bottom: 16px;
-}
-.nearby-layer-item {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 8px;
-  border: 1px solid #e2e8f0;
-  transition: all 0.2s;
-}
-.nearby-layer-item:hover {
-  background: #f1f5f9;
-  border-color: rgb(102, 126, 234);
-}
-.nearby-layer-item.preferred {
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
-  border-color: rgba(251, 191, 36, 0.4);
-}
-.nearby-layer-item label {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  cursor: pointer;
-  margin: 0;
-}
-.nearby-layer-item input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
-  accent-color: rgb(102, 126, 234);
-}
-.layer-info {
-  flex: 1;
-}
-.layer-name {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.preferred-badge {
-  color: #f59e0b;
-  font-size: 12px;
-}
-.layer-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 12px;
-  color: #64748b;
-}
-.layer-meta span {
-  background: rgba(0,0,0,0.05);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.layer-meta .distance {
-  color: #059669;
-  font-weight: 500;
-}
-.nearby-actions {
-  position: sticky;
-  bottom: 0;
-  background: white;
-  padding: 16px 0 0 0;
-  border-top: 1px solid #e2e8f0;
-}
-.action-info {
-  font-size: 13px;
-  color: #64748b;
-  margin-bottom: 12px;
-}
-.connects-info {
-  color: #059669;
-}
-.btn-download {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, rgb(102, 126, 234) 0%, rgb(118, 75, 162) 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-.btn-download:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-}
-.nearby-error {
-  text-align: center;
-  padding: 30px 20px;
-  color: #dc2626;
-}
-.nearby-error span {
-  font-size: 40px;
-  display: block;
-  margin-bottom: 10px;
-}
-</style>
+</script>
 
 {% else %}
+<!-- Empty State -->
 <div class="nearby-empty">
-  <span>🔍</span>
-  <p>No layers found within 2km of this location</p>
-  <p class="hint">Try clicking in a different area</p>
+    <div class="empty-icon">🗺️</div>
+    <h3 class="empty-title">No layers found</h3>
+    <p class="empty-message">No layers within 2km of this location</p>
+    <p class="empty-hint">Try clicking in a different area on the map</p>
 </div>
-
-<style>
-.nearby-empty {
-  text-align: center;
-  padding: 40px 20px;
-  color: #64748b;
-}
-.nearby-empty span {
-  font-size: 48px;
-  display: block;
-  margin-bottom: 16px;
-}
-.nearby-empty p {
-  margin: 0;
-  font-size: 15px;
-}
-.nearby-empty .hint {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #94a3b8;
-}
-</style>
 {% endif %}

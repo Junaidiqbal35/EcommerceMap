@@ -1,4 +1,7 @@
+from collections import defaultdict
+
 from django.conf import settings
+from django.contrib.gis.db.models.functions import Distance
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
@@ -12,7 +15,7 @@ from typing import List, Dict, Any, Optional
 from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 from django.core.cache import cache
-from .models import Layer,  DownloadRecord
+from .models import Layer, DownloadRecord, UserLayerPreference
 from .gda2020_converter import GDA2020Converter
 
 from django.contrib.gis.geos import (
@@ -41,123 +44,69 @@ TEXT_OFFSET_Y = 1.2
 DECIMAL = 3
 
 
-def create_session_with_retries(max_retries=3):
-    """Create a requests session with retry strategy"""
-    session = requests.Session()
-    retry_strategy = Retry(
-        total=max_retries,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "OPTIONS"],
-        backoff_factor=1
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    return session
-
-
-def parse_esri_geometry(geom_dict: Dict, srid: int = 4326) -> Optional[GEOSGeometry]:
+@login_required
+@require_GET
+def all_layers(request):
     """
-    Convert ESRI JSON geometry to GEOS geometry.
-    Handles all ESRI geometry types.
+    Return all layers with basic information as JSON.
+    ✅ OPTIMIZED: Uses database-level centroid calculation and caches user preferences.
     """
-    if not geom_dict:
-        return None
+    # ✅ OPTIMIZATION 1: Cache user preferences (5 min)
+    cache_key = f"user_preferred_layers_{request.user.id}"
+    preferred_layer_ids = cache.get(cache_key)
 
-    try:
-        # Point geometry
-        if 'x' in geom_dict and 'y' in geom_dict:
-            x = float(geom_dict['x'])
-            y = float(geom_dict['y'])
-            # Handle invalid coordinates
-            if abs(x) > 180 or abs(y) > 90:
-                # Might be in different projection, try anyway
-                pass
-            return Point(x, y, srid=srid)
+    if preferred_layer_ids is None:
+        preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+        cache.set(cache_key, preferred_layer_ids, 300)  # 5 minutes
 
-        # MultiPoint
-        elif 'points' in geom_dict:
-            points = []
-            for p in geom_dict['points']:
-                if isinstance(p, (list, tuple)) and len(p) >= 2:
-                    points.append(Point(p[0], p[1], srid=srid))
-            if points:
-                return MultiPoint(points, srid=srid)
+    # ✅ OPTIMIZATION 2: Use annotate for database-level centroid calculation
+    layers = Layer.objects.select_related('server').filter(
+        server__isnull=False
+    ).annotate(
+        centroid_point=Centroid('geometry')  # Calculate centroid in database
+    ).order_by('server__name', 'name')
 
-        # Polyline/LineString
-        elif 'paths' in geom_dict:
-            paths = geom_dict['paths']
-            if not paths:
-                return None
-
-            lines = []
-            for path in paths:
-                if len(path) >= 2:
-                    try:
-                        line = LineString(path, srid=srid)
-                        if line.valid:
-                            lines.append(line)
-                    except:
-                        continue
-
-            if len(lines) == 1:
-                return lines[0]
-            elif len(lines) > 1:
-                return MultiLineString(lines, srid=srid)
-
-        # Polygon
-        elif 'rings' in geom_dict:
-            rings = geom_dict['rings']
-            if not rings:
-                return None
-
-            # Filter out invalid rings
-            valid_rings = []
-            for ring in rings:
-                if len(ring) >= 3:  # Minimum for a valid ring
-                    valid_rings.append(ring)
-
-            if not valid_rings:
-                return None
-
+    data = []
+    for layer in layers:
+        # ✅ OPTIMIZATION 3: Use pre-calculated centroid from annotation
+        centroid_lat = centroid_lng = None
+        if layer.centroid_point:
             try:
-                # First ring is exterior, rest are holes
-                if len(valid_rings) == 1:
-                    poly = Polygon(valid_rings[0], srid=srid)
-                else:
-                    poly = Polygon(valid_rings[0], *valid_rings[1:], srid=srid)
-
-                if poly.valid:
-                    return poly
-                else:
-                    # Try to fix invalid polygon
-                    poly = poly.buffer(0)
-                    return poly
-            except:
-                # Try creating without holes
-                try:
-                    return Polygon(valid_rings[0], srid=srid)
-                except:
-                    return None
-
-        # GeoJSON format (some servers return this even with f=json)
-        elif 'type' in geom_dict and 'coordinates' in geom_dict:
-            try:
-                geom = GEOSGeometry(json.dumps(geom_dict), srid=srid)
-                if geom.valid:
-                    return geom
+                if -90 <= layer.centroid_point.y <= 90 and -180 <= layer.centroid_point.x <= 180:
+                    centroid_lat = layer.centroid_point.y
+                    centroid_lng = layer.centroid_point.x
             except:
                 pass
 
-    except Exception as e:
-        logger.debug(f"Error parsing ESRI geometry: {e}")
+        data.append({
+            'id': layer.layer_id,
+            'name': layer.name,
+            'type': layer.type,
+            'server_name': layer.server.name if layer.server else 'Unknown',
+            'centroid_lat': centroid_lat,
+            'centroid_lng': centroid_lng,
+            'is_preferred': layer.layer_id in preferred_layer_ids,
+        })
 
-    return None
+    return JsonResponse({
+        'layers': data,
+        'preferred_layer_ids': preferred_layer_ids,
+    })
+
 
 @login_required
 def home(request):
-    """Main map page"""
-    return render(request, "home.html")
+
+    favorite_layer_ids = list(
+        UserLayerPreference.objects.filter(
+            user=request.user,
+            is_favorite=True
+        ).values_list('layer_id', flat=True)
+    )
+
+    return render(request, "home.html", {
+        'preferred_layer_ids': json.dumps(favorite_layer_ids),
+    })
 
 
 @login_required
@@ -172,71 +121,224 @@ def user_connects(request):
 
 @login_required
 @require_GET
-def layer_list(request):
-    """Return filtered layer list"""
-    search = request.GET.get('search', '').strip()
-    filter_type = request.GET.get('filter', 'all')
+# def layer_list(request):
+#     """
+#     Return filtered layer list with user preferences.
+#     ✅ OPTIMIZED: Caches user preferences and adds pagination.
+#     """
+#     from django.core.paginator import Paginator
+#
+#     search = request.GET.get('search', '').strip()
+#     filter_type = request.GET.get('filter', 'all').lower()
+#     page_num = request.GET.get('page', 1)
+#
+#     # ✅ OPTIMIZATION 1: Cache user preferences
+#     cache_key = f"user_preferred_layers_{request.user.id}"
+#     preferred_layer_ids = cache.get(cache_key)
+#
+#     if preferred_layer_ids is None:
+#         preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+#         cache.set(cache_key, preferred_layer_ids, 300)
+#
+#     # Start with all layers
+#     layers = Layer.objects.select_related('server').all()
+#
+#     # Apply search filter
+#     if search:
+#         layers = layers.filter(name__icontains=search)
+#
+#     # Apply type/category filters
+#     if filter_type == 'preferred':
+#         if preferred_layer_ids:
+#             layers = layers.filter(layer_id__in=preferred_layer_ids)
+#         else:
+#             layers = layers.none()
+#     elif filter_type == 'water':
+#         layers = layers.filter(Q(name__icontains='WAT') | Q(name__icontains='SEW'))
+#     elif filter_type == 'electric':
+#         layers = layers.filter(name__icontains='ELEC')
+#     elif filter_type == 'road':
+#         layers = layers.filter(Q(name__icontains='ROAD') | Q(name__icontains='STREET'))
+#     elif filter_type == 'contour':
+#         layers = layers.filter(name__icontains='CONTOUR')
+#
+#     # ✅ OPTIMIZATION 2: Add pagination (50 layers per page)
+#     paginator = Paginator(layers, 50)
+#     page_obj = paginator.get_page(page_num)
+#
+#     # Group by server (only for current page)
+#     grouped_layers = defaultdict(list)
+#     for layer in page_obj:
+#         server_name = layer.server.name if layer.server else 'Unknown'
+#         grouped_layers[server_name].append(layer)
+#
+#     # Sort servers alphabetically
+#     grouped_layers = dict(sorted(grouped_layers.items()))
+#
+#     return TemplateResponse(request, 'partials/layer_list.html', {
+#         'grouped_layers': grouped_layers,
+#         'preferred_layer_ids': preferred_layer_ids,
+#         'filter_type': filter_type,
+#         'search': search,
+#         'total_count': paginator.count,
+#         'page_obj': page_obj,  # For pagination controls
+#     })
 
-    # Base queryset
-    layers = Layer.objects.select_related('server').filter(
-        server__isnull=False
+@login_required
+@require_GET
+def layer_list(request):
+    """
+    Return filtered layer list with user preferences.
+    Supports search, type filter, and 'preferred' filter.
+    FIXED: 'preferred' now shows only is_favorite=True layers.
+    """
+    search = request.GET.get('search', '').strip()
+    filter_type = request.GET.get('filter', 'all').lower()
+
+    # Get user's FAVORITE layer IDs (only is_favorite=True)
+    favorite_layer_ids = list(
+        UserLayerPreference.objects.filter(
+            user=request.user,
+            is_favorite=True
+        ).values_list('layer_id', flat=True)
     )
 
-    # Apply search
-    if search:
-        layers = layers.filter(
-            Q(name__icontains=search) |
-            Q(server__name__icontains=search)
-        )
+    # Start with all layers
+    layers = Layer.objects.select_related('server').all()
 
-    # Apply filter
-    if filter_type == 'water':
+    # Apply search filter
+    if search:
+        layers = layers.filter(name__icontains=search)
+
+    # Apply type/category filters
+    if filter_type == 'preferred':
+        # Show only FAVORITE layers (is_favorite=True)
+        if favorite_layer_ids:
+            layers = layers.filter(layer_id__in=favorite_layer_ids)
+        else:
+            layers = layers.none()
+    elif filter_type == 'water':
         layers = layers.filter(
-            Q(name__icontains='water') |
-            Q(name__icontains='sewer') |
-            Q(name__icontains='hydrant') |
-            Q(name__icontains='valve') |
-            Q(name__icontains='storm')
+            Q(name__icontains='WAT') | Q(name__icontains='SEW')
         )
     elif filter_type == 'electric':
-        layers = layers.filter(
-            Q(name__icontains='electric') |
-            Q(name__icontains='power') |
-            Q(name__icontains='pole') |
-            Q(name__icontains='light')
-        )
+        layers = layers.filter(name__icontains='ELEC')
     elif filter_type == 'road':
         layers = layers.filter(
-            Q(name__icontains='road') |
-            Q(name__icontains='street') |
-            Q(name__icontains='footpath') |
-            Q(name__icontains='kerb') |
-            Q(name__icontains='pavement')
+            Q(name__icontains='ROAD') | Q(name__icontains='STREET')
         )
+    elif filter_type == 'contour':
+        layers = layers.filter(name__icontains='CONTOUR')
 
-    # Limit and group
-    layers = layers[:150]
-
-    grouped_layers = {}
+    # Group by server
+    grouped_layers = defaultdict(list)
     for layer in layers:
         server_name = layer.server.name if layer.server else 'Unknown'
-        if server_name not in grouped_layers:
-            grouped_layers[server_name] = []
         grouped_layers[server_name].append(layer)
+
+    # Sort servers alphabetically
+    grouped_layers = dict(sorted(grouped_layers.items()))
 
     return TemplateResponse(request, 'partials/layer_list.html', {
         'grouped_layers': grouped_layers,
-        'layers': layers,
+        'preferred_layer_ids': favorite_layer_ids,  # For star display
+        'filter_type': filter_type,
         'search': search,
-        'filter_type': filter_type
+        'total_count': layers.count(),
     })
+
+def log_export_records(user, layers, lat, lng):
+    """Log download records and update user layer preferences"""
+
+    records = []
+    for layer in layers:
+        records.append(DownloadRecord(
+            user=user,
+            layer=layer,
+            latitude=lat,
+            longitude=lng
+        ))
+
+    # Bulk create download records for efficiency
+    DownloadRecord.objects.bulk_create(records, ignore_conflicts=True)
+
+    # Update user layer preferences (track frequently downloaded layers)
+    for layer in layers:
+        UserLayerPreference.update_preference(user, layer)
+
+
+# ==============================================================================
+# 4. ADD these new view functions (optional - for managing preferences)
+# ==============================================================================
+
+@login_required
+@require_GET
+def user_layer_preferences(request):
+    """
+    API endpoint to get user's preferred layer IDs.
+    Used by JavaScript to initialize preferred layers on page load.
+    """
+    preferred_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+
+    # Optionally include layer details
+    include_details = request.GET.get('details', 'false').lower() == 'true'
+
+    if include_details:
+        preferences = UserLayerPreference.objects.filter(
+            user=request.user
+        ).select_related('layer', 'layer__server').order_by('-download_count')[:50]
+
+        return JsonResponse({
+            'success': True,
+            'preferred_ids': preferred_ids,
+            'preferences': [
+                {
+                    'layer_id': p.layer_id,
+                    'layer_name': p.layer.name,
+                    'server_name': p.layer.server.name if p.layer.server else 'Unknown',
+                    'download_count': p.download_count,
+                    'is_favorite': p.is_favorite,
+                    'last_used': p.last_used.isoformat(),
+                }
+                for p in preferences
+            ]
+        })
+
+    return JsonResponse({
+        'success': True,
+        'preferred_ids': preferred_ids,
+    })
+
+
+
+
+
+
+def log_export_records(user, layers, lat=None, lng=None):
+    """
+    Log download records and update user preferences.
+    Called by export_dxf_multi after successful export.
+    """
+    for layer in layers:
+        # Create download record
+        DownloadRecord.objects.create(
+            user=user,
+            layer=layer,
+            latitude=lat,
+            longitude=lng
+        )
+
+        # Update user preference (increment download count)
+        UserLayerPreference.update_preference(user, layer)
+
+    logger.info(f"Logged {len(layers)} downloads for user {user.username}")
 
 
 @login_required
 def layer_preview_features(request):
     """
     Robust layer preview with maximum compatibility.
-    Always returns valid JSON for better frontend handling.
+    ✅ OPTIMIZED: Added response caching.
     """
     # Get parameters
     layer_id = request.GET.get('layer_id')
@@ -262,6 +364,22 @@ def layer_preview_features(request):
         return JsonResponse(response_data)
 
     try:
+        minx, miny = float(minx), float(miny)
+        maxx, maxy = float(maxx), float(maxy)
+    except (ValueError, TypeError):
+        response_data['message'] = 'Invalid coordinate format'
+        response_data['error'] = True
+        return JsonResponse(response_data)
+
+    # ✅ OPTIMIZATION: Generate cache key from layer + rounded coordinates
+    # Round to 4 decimal places (~11m precision) to increase cache hits
+    cache_key = f"layer_preview_{layer_id}_{round(minx, 4)}_{round(miny, 4)}_{round(maxx, 4)}_{round(maxy, 4)}"
+
+    cached_response = cache.get(cache_key)
+    if cached_response:
+        return JsonResponse(cached_response)
+
+    try:
         layer = Layer.objects.select_related('server').get(layer_id=layer_id)
         response_data['metadata']['layer_name'] = layer.name
         response_data['metadata']['layer_type'] = layer.type
@@ -271,20 +389,10 @@ def layer_preview_features(request):
         response_data['error'] = True
         return JsonResponse(response_data)
 
-    try:
-        # Parse coordinates
-        minx, miny = float(minx), float(miny)
-        maxx, maxy = float(maxx), float(maxy)
-
-        # Validate coordinate ranges
-        if not (-180 <= minx <= 180 and -180 <= maxx <= 180 and
-                -90 <= miny <= 90 and -90 <= maxy <= 90):
-            response_data['message'] = 'Invalid coordinates'
-            response_data['error'] = True
-            return JsonResponse(response_data)
-
-    except (ValueError, TypeError):
-        response_data['message'] = 'Invalid coordinate format'
+    # Validate coordinate ranges
+    if not (-180 <= minx <= 180 and -180 <= maxx <= 180 and
+            -90 <= miny <= 90 and -90 <= maxy <= 90):
+        response_data['message'] = 'Invalid coordinates'
         response_data['error'] = True
         return JsonResponse(response_data)
 
@@ -317,123 +425,57 @@ def layer_preview_features(request):
     feature_limit = 1000 if zoom_level >= 16 else 500 if zoom_level >= 14 else 200 if zoom_level >= 12 else 100
 
     # Check if area is too large
-    if area > 0.5:  # About 50km x 50km
+    if area > 0.5:
         response_data['message'] = f'Zoom in to see features (current zoom: ~{zoom_level})'
         response_data['hint'] = 'Area too large for preview'
         return JsonResponse(response_data)
 
-    # Check if server is configured
     if not layer.server:
         response_data['message'] = 'Server not configured'
         response_data['error'] = True
         return JsonResponse(response_data)
 
-    # Try to fetch features
+    # Fetch features (this is the slow part)
     try:
         features_data = fetch_layer_features_with_attributes(
             layer, minx, miny, maxx, maxy,
             limit=feature_limit,
-            out_sr=4326,  # Always use WGS84 for web display
+            out_sr=4326,
             preview_mode=True
         )
     except Exception as e:
         logger.error(f"Error fetching features for {layer.name}: {e}")
         features_data = []
 
-    # If no features and zoom is high, try expanding area
-    if not features_data and zoom_level >= 14:
-        buffer = 0.001  # About 100m
-        try:
-            features_data = fetch_layer_features_with_attributes(
-                layer,
-                minx - buffer, miny - buffer,
-                maxx + buffer, maxy + buffer,
-                limit=feature_limit,
-                out_sr=4326,
-                preview_mode=True
-            )
-        except:
-            pass
-
     # Convert to GeoJSON features
     geojson_features = []
+    for item in features_data[:feature_limit]:
+        geom = item.get('geometry')
+        attrs = item.get('attributes', {})
 
-    for feature_info in features_data:
-        if len(geojson_features) >= feature_limit:
-            break
+        if geom and geom.valid:
+            try:
+                geojson_features.append({
+                    'type': 'Feature',
+                    'geometry': json.loads(geom.geojson),
+                    'properties': {
+                        'layer_name': layer.name,
+                        'layer_type': layer.type,
+                        **attrs
+                    }
+                })
+            except Exception as e:
+                logger.debug(f"Error converting geometry: {e}")
+                continue
 
-        geom = feature_info.get('geometry')
-        attrs = feature_info.get('attributes', {})
-
-        if not geom or not geom.valid:
-            continue
-
-        try:
-            # Ensure geometry is in WGS84
-            if geom.srid != 4326:
-                try:
-                    geom.transform(4326)
-                except:
-                    continue
-
-            # Simplify geometry if needed
-            if zoom_level <= 12 and geom.geom_type in ['Polygon', 'MultiPolygon']:
-                try:
-                    tolerance = 0.0001 * (15 - zoom_level)
-                    geom = geom.simplify(tolerance, preserve_topology=True)
-                except:
-                    pass
-
-            # Build properties
-            preview_attrs = {
-                'layer_name': layer.name,
-                'layer_type': layer.type,
-                'layer_id': layer.layer_id,
-            }
-
-            # Add important attributes
-            important_keys = [
-                'objectid', 'OBJECTID', 'id', 'ID',
-                'name', 'NAME', 'type', 'TYPE',
-                'status', 'STATUS', 'material', 'MATERIAL',
-                'diameter', 'DIAMETER', 'width', 'WIDTH'
-            ]
-
-            for key in important_keys:
-                if key in attrs and attrs[key] is not None:
-                    preview_attrs[key.lower()] = str(attrs[key])[:100]
-
-            # Create GeoJSON feature
-            feature = {
-                'type': 'Feature',
-                'geometry': json.loads(geom.geojson),
-                'properties': preview_attrs
-            }
-
-            geojson_features.append(feature)
-
-        except Exception as e:
-            logger.debug(f"Error creating GeoJSON feature: {e}")
-            continue
-
-    # Update response
     response_data['features'] = geojson_features
     response_data['metadata']['feature_count'] = len(geojson_features)
 
-    # Add appropriate message
-    if not geojson_features:
-        if zoom_level < 12:
-            response_data['message'] = 'Zoom in to see features'
-            response_data['hint'] = 'This layer requires closer zoom'
-        else:
-            response_data['message'] = 'No features in this area'
-            response_data['hint'] = 'Try panning to a different location'
-    else:
-        response_data['message'] = f'{len(geojson_features)} features'
-        if len(geojson_features) == feature_limit:
-            response_data['hint'] = f'Limited to {feature_limit} features'
+    # ✅ OPTIMIZATION: Cache the response for 5 minutes
+    cache.set(cache_key, response_data, CACHE_TIMEOUT)
 
     return JsonResponse(response_data)
+
 
 @login_required
 def layer_preview_status(request):
@@ -1435,48 +1477,33 @@ def layer_status_check(request):
         'layer_id': layer_id
     })
 
+
 @login_required
-@require_POST
 def nearby_layers(request):
-    """Find nearby layers based on click location"""
     try:
-        lat = float(request.POST.get('lat', 0))
-        lng = float(request.POST.get('lng', 0))
-        selected_layers = request.POST.get('selected_layers', '').split(',')
-        selected_layers = [l for l in selected_layers if l]
+        lat = float(request.GET.get('lat'))
+        lng = float(request.GET.get('lng'))
+        dist = float(request.GET.get('dist', 2000))
+    except (TypeError, ValueError):
+        return render(request, 'partials/nearby_layers.html', {'error': 'Invalid coordinates'})
 
-    except (ValueError, TypeError) as e:
-        return TemplateResponse(request, 'partials/nearby_layers.html', {
-            'error': 'Invalid coordinates provided'
-        })
+    point = Point(lng, lat, srid=4326)
 
-    # Get candidate layers
-    candidates = get_candidate_layers(lat, lng, selected_layers)
+    layers = Layer.objects.annotate(
+        distance=Distance('geometry', point)
+    ).filter(
+        distance__lte=dist,
+        geometry__isnull=False
+    ).select_related('server').order_by('distance')[:20]
 
-    # Calculate distances
-    layers_with_distance = []
-    for layer in candidates:
-        distance = calculate_mock_distance(lat, lng, layer)
-        if distance < 2000:  # Within 2km
-            layers_with_distance.append({
-                'layer': layer,
-                'distance': distance,
-                'features': 10  # Mock for now
-            })
+    layer_data = [{'layer': l, 'distance': round(l.distance.m, 1)} for l in layers]
 
-    # Sort by distance
-    layers_with_distance.sort(key=lambda x: x['distance'])
-
-    context = {
+    return render(request, 'partials/nearby_layers.html', {
+        'layers': layer_data,
         'lat': lat,
         'lng': lng,
-        'layers': layers_with_distance[:20],
         'user_connects': getattr(request.user, 'connects', 0),
-        'selected_context': get_selection_context(selected_layers)
-    }
-
-    return TemplateResponse(request, 'partials/nearby_layers.html', context)
-
+    })
 
 @login_required
 def check_connects(request):
@@ -2618,3 +2645,64 @@ def draw_feature_to_dxf(msp, geom, attributes, layer):
 
     except Exception as e:
         logger.error(f"Error drawing {geom_type}: {e}")
+
+
+@login_required
+@require_POST
+def toggle_layer_favorite(request, layer_id):
+    """
+    Toggle favorite status for a specific layer.
+    Returns HTML for HTMX swap or JSON for API calls.
+    """
+    from django.template.response import TemplateResponse
+
+    # Toggle the favorite
+    is_favorite = UserLayerPreference.toggle_favorite(request.user, layer_id)
+
+    # Check if this is an HTMX request
+    is_htmx = request.headers.get('HX-Request') == 'true'
+
+    if is_htmx:
+        # Get the filter type from referer or request
+        filter_type = request.GET.get('filter', 'all')
+        referer = request.headers.get('Referer', '')
+        if 'filter=preferred' in referer:
+            filter_type = 'preferred'
+
+        # If we're in preferred view and just un-favorited, return empty (removes from list)
+        if filter_type == 'preferred' and not is_favorite:
+            return HttpResponse('')  # Empty response removes the element
+
+        # Otherwise return the updated layer item
+        try:
+            layer = Layer.objects.select_related('server').get(layer_id=layer_id)
+            preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+
+            # Return just the layer item HTML
+            return TemplateResponse(request, 'partials/layer_item.html', {
+                'layer': layer,
+                'preferred_layer_ids': preferred_layer_ids,
+                'filter_type': filter_type,
+            })
+        except Layer.DoesNotExist:
+            return HttpResponse('')
+
+
+    return JsonResponse({
+        'success': True,
+        'layer_id': layer_id,
+        'is_favorite': is_favorite,
+    })
+
+
+@login_required
+@require_POST
+def clear_layer_preferences(request):
+    """Clear all layer preferences for current user."""
+    UserLayerPreference.objects.filter(user=request.user).delete()
+
+    # ✅ OPTIMIZATION: Invalidate user's preference cache
+    cache_key = f"user_preferred_layers_{request.user.id}"
+    cache.delete(cache_key)
+
+    return JsonResponse({'success': True, 'message': 'Preferences cleared'})

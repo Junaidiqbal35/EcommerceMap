@@ -1,4 +1,5 @@
-/* Map Controller - Complete Fixed Version */
+/* Map Controller - OPTIMIZED VERSION */
+/* Removed auto-loading of preferred layers on init */
 /* global L, htmx */
 
 const MapController = {
@@ -10,18 +11,29 @@ const MapController = {
     pendingRequests: new Map(),
     config: {},
     clickMarker: null,
+    preferredLayerIds: [],
 
     init(config) {
         this.config = config;
         console.log('MapController initializing with config:', config);
         this.initMap();
         this.initEventListeners();
+
+        // ✅ FIXED: Only store preferred IDs, don't auto-activate
+        // This prevents the slow API call on page load
+        if (window.preferredLayerIds && Array.isArray(window.preferredLayerIds)) {
+            this.preferredLayerIds = window.preferredLayerIds;
+            console.log('Stored preferred layer IDs (not auto-loading):', this.preferredLayerIds);
+        }
+
+        // ❌ REMOVED: setTimeout(() => this.loadPreferredLayers(), 800);
+        // This was causing slow page load by triggering external API calls
     },
 
     initMap() {
         // Initialize map centered on Brisbane/Gold Coast area
         this.map = L.map('map', {
-            center: [-27.9, 153.2], // Between Brisbane and Gold Coast
+            center: [-27.9, 153.2],
             zoom: 11,
             preferCanvas: true
         });
@@ -33,6 +45,10 @@ const MapController = {
                 maxZoom: 19
             }),
             'satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Esri',
+                maxZoom: 19
+            }),
+            'terrain': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
                 attribution: 'Esri',
                 maxZoom: 19
             }),
@@ -49,7 +65,7 @@ const MapController = {
         this.map.on('moveend', () => this.onMapMove());
         this.map.on('zoomend', () => this.onMapZoom());
 
-        // IMPORTANT: Add click handler for nearby layers
+        // Add click handler for nearby layers
         this.map.on('click', (e) => {
             console.log('Map clicked at:', e.latlng);
             this.handleMapClick(e);
@@ -65,16 +81,66 @@ const MapController = {
             if (window.Alpine && evt.detail.target.querySelector('[x-data]')) {
                 window.Alpine.initTree(evt.detail.target);
             }
-        });
 
-        // Listen for filter button clicks (since they might be added dynamically)
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('filter-btn')) {
-                const filterType = e.target.dataset.filter || 'all';
-                this.applyFilter(filterType, e.target);
+            // ✅ FIXED: Only mark preferred layers visually (no activation)
+            if (evt.detail.target.id === 'layer-list' || evt.detail.target.closest('#layer-list')) {
+                setTimeout(() => this.markPreferredLayers(), 100);
+            }
+
+            // Open sidebar when nearby content loads
+            if (evt.detail.target.id === 'nearbyContent') {
+                this.openNearbySidebar();
             }
         });
+
+        // Listen for filter button clicks
+        // Filter buttons - use htmx.ajax directly
+    let currentFilter = 'all';
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+
+        // Update active state
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+
+        // Get filter type
+        currentFilter = this.dataset.filter;
+        const searchInput = document.getElementById('layerSearch') || document.getElementById('layer-search');
+        const searchValue = searchInput ? searchInput.value : '';
+
+        // Build URL with both search and filter params
+        let url = '{% url "layer_list" %}?filter=' + encodeURIComponent(currentFilter);
+        if (searchValue) {
+            url += '&search=' + encodeURIComponent(searchValue);
+        }
+
+        htmx.ajax('GET', url, {
+            target: '#layer-list',
+            swap: 'innerHTML'
+        });
+    });
+});
     },
+
+    markPreferredLayers() {
+        if (!this.preferredLayerIds || this.preferredLayerIds.length === 0) {
+            return;
+        }
+
+        this.preferredLayerIds.forEach(layerId => {
+            const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
+            if (layerItem) {
+                layerItem.classList.add('layer-preferred');
+            }
+        });
+
+        console.log(`Marked ${this.preferredLayerIds.length} preferred layers (visual only)`);
+    },
+
+    // ❌ REMOVED: activateSinglePreferredLayer() function
+    // This was causing slow page load by calling loadLayerPreview()
 
     handleMapClick(e) {
         const lat = e.latlng.lat;
@@ -97,23 +163,47 @@ const MapController = {
             fillOpacity: 0.8
         }).addTo(this.map);
 
-        // Update form values
-        const form = document.getElementById('mapClickForm');
-        if (form) {
-            document.getElementById('clickLat').value = lat;
-            document.getElementById('clickLng').value = lng;
+        // Store clicked location for download
+        this.clickedLocation = { lat, lng };
 
-            // Get selected layers
-            const selectedLayerIds = Array.from(this.activeLayers).join(',');
-            document.getElementById('selectedLayers').value = selectedLayerIds;
+        // Fetch nearby layers directly
+        const url = `${this.config.nearbyUrl}?lat=${lat}&lng=${lng}&dist=2000`;
 
-            console.log('Triggering HTMX form submit for nearby layers');
-
-            // Trigger HTMX request
-            htmx.trigger(form, 'submit');
-        } else {
-            console.error('mapClickForm not found');
+        // Show loading state in sidebar
+        const nearbyContent = document.getElementById('nearbyContent');
+        if (nearbyContent) {
+            nearbyContent.innerHTML = '<div class="htmx-indicator" style="display:flex;"><div class="loading-spinner"></div></div>';
         }
+
+        // Open sidebar immediately
+        this.openNearbySidebar();
+
+        fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': this.config.csrfToken
+            }
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.text();
+        })
+        .then(html => {
+            if (nearbyContent) {
+                nearbyContent.innerHTML = html;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching nearby layers:', error);
+            if (nearbyContent) {
+                nearbyContent.innerHTML = `
+                    <div class="nearby-error">
+                        <div class="error-icon">⚠️</div>
+                        <p class="error-message">Failed to load nearby layers</p>
+                    </div>`;
+            }
+            this.showToast('Failed to load nearby layers', 'error');
+        });
     },
 
     onMapMove() {
@@ -130,13 +220,14 @@ const MapController = {
         this.refreshActivePreviews();
     },
 
+    // ✅ OPTIMIZED: Increased debounce time from 500ms to 1000ms
     refreshActivePreviews() {
         clearTimeout(this.refreshTimeout);
         this.refreshTimeout = setTimeout(() => {
             this.activeLayers.forEach(layerId => {
                 this.loadLayerPreview(layerId);
             });
-        }, 500);
+        }, 1000); // Changed from 500ms to 1000ms
     },
 
     toggleLayer(layerId, checkbox) {
@@ -179,305 +270,210 @@ const MapController = {
 
         const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
         if (layerItem) {
-            layerItem.classList.remove('layer-active', 'layer-loading');
+            layerItem.classList.remove('layer-active');
         }
     },
 
     async loadLayerPreview(layerId) {
-        if (!this.activeLayers.has(layerId)) return;
-
-        // Cancel previous request
-        if (this.pendingRequests.has(layerId)) {
-            const controller = this.pendingRequests.get(layerId);
-            controller.abort();
-        }
-
         const bounds = this.map.getBounds();
         const zoom = this.map.getZoom();
 
-        console.log(`Loading preview for layer ${layerId} at zoom ${zoom}`);
-
-        if (zoom < 10) {
-            console.log('Zoom too low for preview');
-            this.updateLayerStatus(layerId, 'Zoom in to load', 'warning');
+        // ✅ OPTIMIZED: Skip if zoomed out too far (changed from 10 to 12)
+        if (zoom < 12) {
+            console.log(`Zoom ${zoom} too low, skipping preview for layer ${layerId}`);
+            this.showToast('Zoom in closer to load layer preview', 'info');
             return;
+        }
+
+        // Cancel any pending request for this layer
+        if (this.pendingRequests.has(layerId)) {
+            this.pendingRequests.get(layerId).abort();
         }
 
         const controller = new AbortController();
         this.pendingRequests.set(layerId, controller);
 
-        const url = new URL(this.config.previewUrl, window.location.origin);
-        url.searchParams.append('layer_id', layerId);
-        url.searchParams.append('minx', bounds.getWest());
-        url.searchParams.append('miny', bounds.getSouth());
-        url.searchParams.append('maxx', bounds.getEast());
-        url.searchParams.append('maxy', bounds.getNorth());
-
-        const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
-        if (layerItem) {
-            layerItem.classList.add('layer-loading');
-        }
+        this.updateLayerStatus(layerId, 'loading');
 
         try {
-            const response = await fetch(url, {
-                signal: controller.signal,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+            const params = new URLSearchParams({
+                layer_id: layerId,
+                minx: bounds.getWest(),
+                miny: bounds.getSouth(),
+                maxx: bounds.getEast(),
+                maxy: bounds.getNorth()
             });
 
-            const data = await response.json();
-            this.pendingRequests.delete(layerId);
+            const response = await fetch(`${this.config.previewUrl}?${params}`, {
+                signal: controller.signal
+            });
 
-            if (layerItem) {
-                layerItem.classList.remove('layer-loading');
-            }
+            if (!response.ok) throw new Error('Failed to fetch preview');
+
+            const geojson = await response.json();
 
             // Remove existing preview
             if (this.previewLayers[layerId]) {
                 this.map.removeLayer(this.previewLayers[layerId]);
-                delete this.previewLayers[layerId];
             }
 
-            // Add features if any
-            if (data.features && data.features.length > 0) {
-                console.log(`Adding ${data.features.length} features for layer ${layerId}`);
-
-                const geoJsonLayer = L.geoJSON(data, {
-                    style: (feature) => this.getFeatureStyle(feature),
-                    pointToLayer: (feature, latlng) => this.createPointMarker(feature, latlng),
-                    onEachFeature: (feature, layer) => this.bindFeaturePopup(feature, layer)
+            // Add new preview
+            if (geojson.features && geojson.features.length > 0) {
+                const layer = L.geoJSON(geojson, {
+                    style: this.getLayerStyle(geojson.features[0]?.properties?.layer_type),
+                    pointToLayer: (feature, latlng) => {
+                        return L.circleMarker(latlng, {
+                            radius: 6,
+                            fillColor: this.getLayerColor(feature.properties?.layer_type),
+                            color: '#fff',
+                            weight: 2,
+                            fillOpacity: 0.8
+                        });
+                    },
+                    onEachFeature: (feature, layer) => {
+                        if (feature.properties) {
+                            let popup = `<strong>${feature.properties.layer_name || 'Feature'}</strong>`;
+                            if (feature.properties.layer_type) {
+                                popup += `<br>Type: ${feature.properties.layer_type}`;
+                            }
+                            layer.bindPopup(popup);
+                        }
+                    }
                 });
 
-                this.previewLayers[layerId] = geoJsonLayer;
-                geoJsonLayer.addTo(this.map);
-
-                this.updateLayerStatus(layerId, `${data.features.length} features`, 'success');
+                layer.addTo(this.map);
+                this.previewLayers[layerId] = layer;
+                this.updateLayerStatus(layerId, 'loaded', geojson.features.length);
             } else {
-                const message = data.message || 'No features in view';
-                this.updateLayerStatus(layerId, message, 'warning');
+                this.updateLayerStatus(layerId, 'empty');
             }
-
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log(`Request for layer ${layerId} was aborted`);
+            } else {
+                console.error(`Error loading layer ${layerId}:`, error);
+                this.updateLayerStatus(layerId, 'error');
+            }
+        } finally {
             this.pendingRequests.delete(layerId);
-
-            if (layerItem) {
-                layerItem.classList.remove('layer-loading');
-            }
-
-            if (error.name !== 'AbortError') {
-                console.error(`Failed to load preview for layer ${layerId}:`, error);
-                this.updateLayerStatus(layerId, 'Load error', 'error');
-            }
         }
     },
 
-    updateLayerStatus(layerId, message, type) {
-        const statusEl = document.querySelector(`#layer-status-${layerId}`);
-        if (statusEl) {
-            statusEl.textContent = message;
-            statusEl.className = `feature-count status-${type}`;
-        }
-    },
+    updateLayerStatus(layerId, status, featureCount = 0) {
+        this.layerStatus.set(layerId, { status, featureCount });
 
-    getFeatureStyle(feature) {
-        const layerName = (feature.properties?.layer_name || '').toLowerCase();
+        const layerItem = document.querySelector(`[data-layer-id="${layerId}"]`);
+        if (!layerItem) return;
 
-        // Color scheme based on infrastructure type
-        if (layerName.includes('water') || layerName.includes('hydrant')) {
-            return { color: '#3b82f6', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('sewer') || layerName.includes('waste')) {
-            return { color: '#84cc16', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('storm') || layerName.includes('drain')) {
-            return { color: '#06b6d4', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('electric') || layerName.includes('power')) {
-            return { color: '#f59e0b', weight: 2, opacity: 0.8, fillOpacity: 0.3 };
-        } else if (layerName.includes('road') || layerName.includes('street')) {
-            return { color: '#6b7280', weight: 3, opacity: 0.8, fillOpacity: 0.2 };
-        }
-        return { color: '#8b5cf6', weight: 2, opacity: 0.7, fillOpacity: 0.3 };
-    },
+        // Remove old status classes
+        layerItem.classList.remove('loading', 'error', 'empty');
 
-    createPointMarker(feature, latlng) {
-        const style = this.getFeatureStyle(feature);
-        return L.circleMarker(latlng, {
-            radius: 6,
-            fillColor: style.color,
-            color: '#fff',
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8
-        });
-    },
-
-    bindFeaturePopup(feature, layer) {
-        const props = feature.properties || {};
-        let popupContent = '<div class="feature-popup">';
-        popupContent += `<h4>${props.layer_name || 'Feature'}</h4>`;
-
-        const excludeKeys = ['layer_name', 'layer_type', 'layer_id'];
-        Object.keys(props).forEach(key => {
-            if (!excludeKeys.includes(key) && props[key] !== null) {
-                const displayKey = key.replace(/_/g, ' ').toUpperCase();
-                popupContent += `<div><strong>${displayKey}:</strong> ${props[key]}</div>`;
-            }
-        });
-        popupContent += '</div>';
-
-        layer.bindPopup(popupContent, {
-            maxWidth: 300,
-            className: 'custom-popup'
-        });
-    },
-
-    zoomToLayer(layerId, lat, lng) {
-        console.log(`Zooming to layer ${layerId} at ${lat}, ${lng}`);
-
-        // Check for null/invalid coordinates
-        if (!lat || !lng || lat === 'null' || lng === 'null' || lat === 'None' || lng === 'None') {
-            this.showToast('No location data for this layer', 'warning');
-            return;
+        // Add status indicator
+        let statusEl = layerItem.querySelector('.layer-status');
+        if (!statusEl) {
+            statusEl = document.createElement('span');
+            statusEl.className = 'layer-status';
+            layerItem.querySelector('.layer-info')?.appendChild(statusEl);
         }
 
-        lat = parseFloat(lat);
-        lng = parseFloat(lng);
-
-        if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-            this.showToast('Invalid coordinates for this layer', 'error');
-            return;
-        }
-
-        this.map.setView([lat, lng], 15, {
-            animate: true,
-            duration: 1.0
-        });
-
-        // Flash marker at location
-        const marker = L.circleMarker([lat, lng], {
-            radius: 12,
-            fillColor: '#ff7800',
-            color: '#fff',
-            weight: 3,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).addTo(this.map);
-
-        // Pulse effect
-        let pulseCount = 0;
-        const pulseInterval = setInterval(() => {
-            pulseCount++;
-            marker.setRadius(pulseCount % 2 === 0 ? 12 : 15);
-            if (pulseCount >= 6) {
-                clearInterval(pulseInterval);
-                setTimeout(() => this.map.removeLayer(marker), 500);
-            }
-        }, 300);
-
-        // Auto-activate layer
-        const checkbox = document.getElementById(`layer-${layerId}`);
-        if (checkbox && !checkbox.checked) {
-            checkbox.checked = true;
-            this.toggleLayer(layerId, checkbox);
+        switch (status) {
+            case 'loading':
+                statusEl.innerHTML = '⏳';
+                statusEl.title = 'Loading...';
+                layerItem.classList.add('loading');
+                break;
+            case 'loaded':
+                statusEl.innerHTML = `✓ ${featureCount}`;
+                statusEl.title = `${featureCount} features loaded`;
+                break;
+            case 'empty':
+                statusEl.innerHTML = '∅';
+                statusEl.title = 'No features in view';
+                layerItem.classList.add('empty');
+                break;
+            case 'error':
+                statusEl.innerHTML = '⚠️';
+                statusEl.title = 'Failed to load';
+                layerItem.classList.add('error');
+                break;
         }
     },
 
     updateActiveCount() {
         const count = this.activeLayers.size;
-        const countEl = document.getElementById('activeCount');
+        const countEl = document.getElementById('activeLayerCount');
+        const fabEl = document.getElementById('exportFab');
+
         if (countEl) {
-            countEl.textContent = count > 0 ? `(${count})` : '';
+            countEl.textContent = count;
+        }
+
+        if (fabEl) {
+            fabEl.style.display = count > 0 ? 'flex' : 'none';
         }
     },
 
-    showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.textContent = message;
-
-        let container = document.getElementById('toastContainer');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'toastContainer';
-            container.className = 'toast-container';
-            document.body.appendChild(container);
-        }
-
-        container.appendChild(toast);
-
-        // Animate in
-        requestAnimationFrame(() => {
-            toast.classList.add('show');
-        });
-
-        // Remove after delay
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+    getLayerStyle(layerType) {
+        const styles = {
+            'point': { color: '#e74c3c', weight: 2, fillOpacity: 0.7 },
+            'polyline': { color: '#3498db', weight: 3, fillOpacity: 0 },
+            'polygon': { color: '#27ae60', weight: 2, fillOpacity: 0.3 }
+        };
+        return styles[layerType] || { color: '#9b59b6', weight: 2, fillOpacity: 0.5 };
     },
 
-    applyFilter(filterType, button) {
+    getLayerColor(layerType) {
+        const colors = {
+            'point': '#e74c3c',
+            'polyline': '#3498db',
+            'polygon': '#27ae60'
+        };
+        return colors[layerType] || '#9b59b6';
+    },
+
+    applyFilter(filterType, clickedBtn) {
         console.log('Applying filter:', filterType);
 
-        // Update button states
+        // Update active button state
         document.querySelectorAll('.filter-btn').forEach(btn => {
             btn.classList.remove('active');
         });
-        if (button) {
-            button.classList.add('active');
-        }
+        clickedBtn.classList.add('active');
 
-        // Update search with filter
+        // Trigger HTMX request to reload layer list with filter
+        const layerList = document.getElementById('layer-list');
         const searchInput = document.getElementById('layerSearch');
-        if (searchInput) {
-            const currentUrl = searchInput.getAttribute('hx-get');
-            const url = new URL(currentUrl, window.location.origin);
-            url.searchParams.set('filter', filterType);
-            searchInput.setAttribute('hx-get', url.pathname + url.search);
 
-            // Trigger search
-            htmx.trigger(searchInput, 'keyup');
+        const params = new URLSearchParams();
+        params.set('filter', filterType);
+        if (searchInput && searchInput.value) {
+            params.set('search', searchInput.value);
         }
+
+        // Update URL and trigger HTMX
+        const url = `${this.config.layerListUrl}?${params}`;
+        htmx.ajax('GET', url, {target: '#layer-list', swap: 'innerHTML'});
     },
 
-    refreshLayers() {
-        console.log('Refreshing all active layers');
-        this.refreshActivePreviews();
-        this.showToast('Refreshing layers...', 'info');
-    },
-
-    changeBasemap(mapType) {
-        Object.values(this.baseLayers).forEach(layer => {
-            this.map.removeLayer(layer);
-        });
-
-        if (this.baseLayers[mapType]) {
-            this.baseLayers[mapType].addTo(this.map);
-            this.showToast(`Switched to ${mapType} map`, 'success');
-        }
-    },
-
-    toggleBasemapMenu() {
-        const menu = document.getElementById('basemapOptions');
-        if (menu) {
-            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-        }
-    },
-
-    // Nearby layers functions
     openNearbySidebar() {
-        console.log('Opening nearby sidebar');
         const sidebar = document.getElementById('nearbySidebar');
+        const overlay = document.getElementById('sidebarOverlay');
         if (sidebar) {
             sidebar.classList.add('open');
+        }
+        if (overlay) {
+            overlay.classList.add('show');
         }
     },
 
     closeNearbySidebar() {
-        console.log('Closing nearby sidebar');
         const sidebar = document.getElementById('nearbySidebar');
+        const overlay = document.getElementById('sidebarOverlay');
         if (sidebar) {
             sidebar.classList.remove('open');
+        }
+        if (overlay) {
+            overlay.classList.remove('show');
         }
 
         // Remove click marker
@@ -487,142 +483,190 @@ const MapController = {
         }
     },
 
-    // Download functions
-    async downloadArea(layerId, lat, lng) {
-        const bounds = this.map.getBounds();
-        const selectedLayers = layerId ? [layerId] : Array.from(this.activeLayers);
-
-        if (selectedLayers.length === 0) {
-            this.showToast('Please select layers to download', 'warning');
-            return;
+    showToast(message, type = 'info') {
+        // Simple toast notification
+        const existingToast = document.querySelector('.map-toast');
+        if (existingToast) {
+            existingToast.remove();
         }
 
-        // Show loading
-        this.showToast('Preparing download...', 'info');
+        const toast = document.createElement('div');
+        toast.className = `map-toast toast-${type}`;
+        toast.innerHTML = message;
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#3b82f6'};
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 9999;
+            font-size: 14px;
+            animation: slideUp 0.3s ease;
+        `;
 
-        const formData = new FormData();
-        formData.append('csrfmiddlewaretoken', this.config.csrfToken);
-        selectedLayers.forEach(id => formData.append('layer_ids[]', id));
-        formData.append('minx', bounds.getWest());
-        formData.append('miny', bounds.getSouth());
-        formData.append('maxx', bounds.getEast());
-        formData.append('maxy', bounds.getNorth());
-        formData.append('lat', lat || bounds.getCenter().lat);
-        formData.append('lng', lng || bounds.getCenter().lng);
+        document.body.appendChild(toast);
 
-        try {
-            const response = await fetch(this.config.exportUrl, {
-                method: 'POST',
-                body: formData
-            });
+        setTimeout(() => {
+            toast.style.animation = 'slideDown 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
 
-            if (response.ok) {
-                const contentType = response.headers.get('content-type');
-
-                if (contentType && contentType.includes('application/dxf')) {
-                    // Handle DXF file download
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `layers_export_${new Date().getTime()}.dxf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-
-                    this.showToast('Download started successfully!', 'success');
-                } else {
-                    // Handle JSON error response
-                    const data = await response.json();
-                    const errorMsg = data.error || 'Export failed';
-                    this.showToast(errorMsg, 'error');
-
-                    // Show detailed error if available
-                    if (data.details) {
-                        console.error('Export error details:', data.details);
-                    }
-                }
-            } else {
-                this.showToast('Export request failed', 'error');
+    switchBasemap(name) {
+        // Remove current basemap
+        Object.values(this.baseLayers).forEach(layer => {
+            if (this.map.hasLayer(layer)) {
+                this.map.removeLayer(layer);
             }
-        } catch (error) {
-            console.error('Download error:', error);
-            this.showToast('Download failed. Please try again.', 'error');
+        });
+
+        // Add selected basemap
+        if (this.baseLayers[name]) {
+            this.baseLayers[name].addTo(this.map);
         }
     },
 
-    async downloadNearbyLayers() {
-        const form = document.getElementById('nearbyDownloadForm');
-        if (!form) {
-            console.error('Nearby download form not found');
+    async downloadArea() {
+        if (this.activeLayers.size === 0) {
+            this.showToast('Select at least one layer first', 'error');
             return;
         }
 
-        const checkedBoxes = form.querySelectorAll('input[name="layer_ids[]"]:checked');
-        if (checkedBoxes.length === 0) {
-            this.showToast('Please select layers to download', 'warning');
-            return;
-        }
-
-        this.showToast(`Downloading ${checkedBoxes.length} layers...`, 'info');
-
-        const formData = new FormData(form);
         const bounds = this.map.getBounds();
-        formData.append('minx', bounds.getWest());
-        formData.append('miny', bounds.getSouth());
-        formData.append('maxx', bounds.getEast());
-        formData.append('maxy', bounds.getNorth());
+        const layerIds = Array.from(this.activeLayers);
+
+        this.showToast('Preparing download...', 'info');
 
         try {
+            const formData = new FormData();
+            layerIds.forEach(id => formData.append('layer_ids[]', id));
+            formData.append('minx', bounds.getWest());
+            formData.append('miny', bounds.getSouth());
+            formData.append('maxx', bounds.getEast());
+            formData.append('maxy', bounds.getNorth());
+
             const response = await fetch(this.config.exportUrl, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                headers: {
+                    'X-CSRFToken': this.config.csrfToken
+                }
             });
 
-            if (response.ok) {
-                const contentType = response.headers.get('content-type');
-
-                if (contentType && contentType.includes('application/dxf')) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `nearby_layers_${new Date().getTime()}.dxf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-
-                    this.showToast('Download started successfully!', 'success');
-
-                    // Close sidebar after successful download
-                    setTimeout(() => this.closeNearbySidebar(), 2000);
-                } else {
-                    const data = await response.json();
-                    this.showToast(data.error || 'Export failed', 'error');
-                }
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Download failed');
             }
+
+            // Download the file
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `layers_export_${new Date().toISOString().slice(0,10)}.dxf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            this.showToast('Download complete!', 'success');
         } catch (error) {
             console.error('Download error:', error);
-            this.showToast('Download failed', 'error');
+            this.showToast(error.message || 'Download failed', 'error');
         }
     }
 };
 
-// Global function bindings
-window.MapController = MapController;
-window.toggleLayer = (layerId, checkbox) => MapController.toggleLayer(layerId, checkbox);
-window.zoomToLayer = (layerId, lat, lng) => MapController.zoomToLayer(layerId, lat, lng);
-window.downloadArea = (layerId, lat, lng) => MapController.downloadArea(layerId, lat, lng);
-window.downloadNearbyLayers = () => MapController.downloadNearbyLayers();
-window.updateNearbyCount = () => {
-    const form = document.getElementById('nearbyDownloadForm');
-    if (form) {
-        const checked = form.querySelectorAll('input[name="layer_ids[]"]:checked').length;
-        const countEl = document.getElementById('nearbyCount');
-        if (countEl) {
-            countEl.textContent = checked > 0 ? `(${checked})` : '';
+// Global functions for onclick handlers in templates
+function toggleLayer(layerId, checkbox) {
+    MapController.toggleLayer(layerId, checkbox);
+}
+
+function zoomToLayer(layerId, lat, lng) {
+    if (MapController.map && lat && lng) {
+        MapController.map.flyTo([lat, lng], 15);
+    }
+}
+
+function toggleMinimize() {
+    const panel = document.getElementById('layerPanel');
+    const icon = document.getElementById('minimizeIcon');
+    if (panel) {
+        panel.classList.toggle('minimized');
+        if (icon) {
+            icon.textContent = panel.classList.contains('minimized') ? '+' : '−';
         }
     }
-};
+}
+
+function refreshLayers() {
+    const layerList = document.getElementById('layer-list');
+    if (layerList) {
+        htmx.trigger(layerList, 'htmx:trigger');
+    }
+}
+
+function toggleBasemapOptions() {
+    const options = document.getElementById('basemapOptions');
+    if (options) {
+        options.classList.toggle('show');
+    }
+}
+
+function updateNearbyCount() {
+    const checkboxes = document.querySelectorAll('#nearbyDownloadForm input[type="checkbox"]:checked');
+    const countEl = document.getElementById('nearbyCount');
+    if (countEl) {
+        countEl.textContent = `(${checkboxes.length})`;
+    }
+}
+
+async function downloadNearbyLayers() {
+    const form = document.getElementById('nearbyDownloadForm');
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const layerIds = formData.getAll('layer_ids[]');
+
+    if (layerIds.length === 0) {
+        MapController.showToast('Select at least one layer', 'error');
+        return;
+    }
+
+    MapController.showToast('Preparing download...', 'info');
+
+    try {
+        const response = await fetch(MapController.config.exportUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': MapController.config.csrfToken
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Download failed');
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `nearby_layers_${new Date().toISOString().slice(0,10)}.dxf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        MapController.showToast('Download complete!', 'success');
+        MapController.closeNearbySidebar();
+    } catch (error) {
+        console.error('Download error:', error);
+        MapController.showToast(error.message || 'Download failed', 'error');
+    }
+}

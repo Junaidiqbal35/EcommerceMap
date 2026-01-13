@@ -1,26 +1,25 @@
-# urls.py - Complete URL configuration
-
+# core/urls.py
 from django.urls import path
 from . import views
 
 urlpatterns = [
-    # Main page
-    path('', views.home, name='home'),
+    # Main map page
+    path("", views.home, name="home"),
 
-    # Layer management
-    path('layer-list/', views.layer_list, name='layer_list'),
-    path('layer-preview-features/', views.layer_preview_features, name='layer_preview_features'),
-    path('layer-preview-status/', views.layer_status_check, name='layer_status_check'),
+    # Layer list (HTMX partial)
+    path("layer-list/", views.layer_list, name="layer_list"),
 
-    # User interaction
-    path('nearby-layers/', views.nearby_layers, name='nearby_layers'),
-    # path('user-connects/', views.user_connects, name='user_connects'),
+    # Layer API endpoints
+    path("all-layers/", views.all_layers, name="all_layers"),
+    path("layer-preview-features/", views.layer_preview_features, name="layer_preview_features"),
+    path("nearby-layers/", views.nearby_layers, name="nearby_layers"),
 
-    # Export/Download
-    path('export-dxf-multi/', views.export_dxf_multi, name='export_dxf_multi'),
-    path('download-layers/', views.download_layers, name='download_layers'),
+    # Export
+    path("export-dxf-multi/", views.export_dxf_multi, name="export_dxf_multi"),
 
-    # Utility
-    path('check-connects/', views.check_connects, name='check_connects'),
-
+    # User preference endpoints
+    path("user-connects/", views.user_connects, name="user_connects"),
+    path("user-layer-preferences/", views.user_layer_preferences, name="user_layer_preferences"),
+    path("clear-layer-preferences/", views.clear_layer_preferences, name="clear_layer_preferences"),
+    path("toggle-layer-favorite/<int:layer_id>/", views.toggle_layer_favorite, name="toggle_layer_favorite"),
 ]

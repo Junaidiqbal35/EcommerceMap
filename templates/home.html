@@ -1,237 +1,332 @@
 {% extends "base.html" %}
 {% load static %}
-
-{% block title %}
-    <title>GIS Map - {{ request.user.username }}</title>
-{% endblock %}
-
 {% block extrahead %}
 <link rel="stylesheet" href="{% static 'css/home.css' %}">
-<!-- HTMX with extensions -->
-<script src="https://unpkg.com/htmx.org@2.0.0"></script>
-<script src="https://unpkg.com/htmx-ext-loading-states@2.0.0/loading-states.js"></script>
-<!-- Alpine.js for UI interactions -->
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-<!-- SweetAlert2 for confirmations -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Leaflet Geocoder -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css">
-<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-{% endblock %}
+{% endblock extrahead %}
 
 {% block content %}
-<!-- Map Container with data attributes for URLs -->
-<div id="map" 
-     data-export-url="{% url 'export_dxf_multi' %}"
-     data-layers-url="{% url 'layer_list' %}"
-     data-nearby-url="{% url 'nearby_layers' %}"
-     data-preview-url="{% url 'layer_preview_features' %}"
-{#     data-connects-url="{% url 'user_connects' %}"#}
-     data-csrf-token="{{ csrf_token }}">
-</div>
+<!-- Map Container -->
+<div id="map"></div>
 
-<!-- User Connects Badge -->
-{#<div class="connects-badge" id="connectsBadge">#}
-{#    <span class="connects-icon">💰</span>#}
-{#    <span class="connects-count" #}
-{#          hx-get="{% url 'user_connects' %}" #}
-{#          hx-trigger="load, connectsUpdated from:body"#}
-{#          hx-swap="innerHTML">#}
-{#        Loading...#}
-{#    </span>#}
-{#</div>#}
-
-<!-- Basemap Control -->
-<div class="basemap-control" id="basemapControl" style="margin-top: 50px;">
-    <div class="basemap-toggle" onclick="MapController.toggleBasemapMenu()">
-        <span>🗺️ Basemaps</span>
-    </div>
-    <div class="basemap-options" id="basemapOptions" style="display: none;">
-        <label class="basemap-option">
-            <input type="radio" name="basemap" value="osm" checked onchange="MapController.changeBasemap('osm')">
-            <span>🗺️ Streets</span>
-        </label>
-        <label class="basemap-option">
-            <input type="radio" name="basemap" value="satellite" onchange="MapController.changeBasemap('satellite')">
-            <span>🛰️ Satellite</span>
-        </label>
-        <label class="basemap-option">
-            <input type="radio" name="basemap" value="dark" onchange="MapController.changeBasemap('dark')">
-            <span>🌙 Dark</span>
-        </label>
-    </div>
-</div>
-
-<!-- Layer Panel -->
-<div id="layerPanel" x-data="{ minimized: false }">
-    <div class="panel-header">
-        <h4>
-            <span>📦</span>
-            <span>Layers</span>
-            <span id="activeCount" class="layer-count"></span>
-        </h4>
-        <div class="panel-controls">
-            <button @click="minimized = !minimized" class="btn-control" title="Minimize">
-                <span x-text="minimized ? '➕' : '➖'"></span>
-            </button>
-            <button class="btn-control" 
-                    title="Refresh"
-                    onclick="MapController.refreshLayers()">
-                🔄
-            </button>
-        </div>
-    </div>
-    
-    <div class="panel-content" x-show="!minimized" x-transition>
-        <!-- Search Box -->
-        <div class="search-box">
-            <input type="text" 
-                   id="layerSearch"
-                   placeholder="🔍 Search layers..." 
-                   name="search"
-                   hx-get="{% url 'layer_list' %}"
-                   hx-trigger="keyup changed delay:500ms"
-                   hx-target="#layerListContent"
-                   hx-indicator="#layerLoadingIndicator"
-                   class="search-input">
-        </div>
-        
-        <!-- Filter Buttons -->
-        <div class="filter-buttons">
-            <button class="filter-btn active"
-                    onclick="MapController.filterLayers('all', this)">
-                All
-            </button>
-            <button class="filter-btn"
-                    onclick="MapController.filterLayers('water', this)">
-                💧 Water
-            </button>
-            <button class="filter-btn"
-                    onclick="MapController.filterLayers('electric', this)">
-                ⚡ Electric
-            </button>
-            <button class="filter-btn"
-                    onclick="MapController.filterLayers('road', this)">
-                🛣️ Roads
-            </button>
-        </div>
-        
-        <!-- Layer List Container -->
-        <div id="layerList">
-            <div id="layerLoadingIndicator" class="htmx-indicator">
-                <div class="loading-spinner"></div>
-            </div>
-            <div id="layerListContent" 
-                 hx-get="{% url 'layer_list' %}" 
-                 hx-trigger="load"
-                 hx-ext="loading-states">
-                <!-- Layers will be loaded here -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Nearby Layers Sidebar -->
-<div id="nearbySidebar" class="nearby-sidebar">
-    <div class="sidebar-header">
-        <h5>
-            <span>📍</span>
-            <span>Nearby Layers</span>
-            <span id="nearbyCount" class="nearby-count"></span>
-        </h5>
-        <button onclick="MapController.closeNearbySidebar()" class="btn-close">✕</button>
-    </div>
-    
-    <div class="sidebar-content">
-        <div id="nearbyContent" hx-ext="loading-states">
-            <!-- Nearby layers will be loaded here -->
-            <div class="empty-state">
-                <div class="empty-icon">🗺️</div>
-                <p>Click on the map to find nearby layers</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Toast Notifications Container -->
+<!-- Toast Container for notifications -->
 <div id="toastContainer" class="toast-container"></div>
 
-<!-- Hidden Form for Map Clicks -->
-<form id="mapClickForm" 
-      hx-post="{% url 'nearby_layers' %}"
-      hx-target="#nearbyContent"
-      hx-swap="innerHTML"
-      hx-on::after-request="MapController.openNearbySidebar()"
-      style="display: none;">
-    {% csrf_token %}
-    <input type="hidden" name="lat" id="clickLat">
-    <input type="hidden" name="lng" id="clickLng">
-    <input type="hidden" name="selected_layers" id="selectedLayers">
-</form>
-
-<!-- Download Modal Result Container -->
-<div id="downloadResultModal" class="modal" style="display: none;">
-    <div class="modal-overlay" onclick="MapController.closeDownloadModal()"></div>
-    <div class="modal-content" id="downloadResultContent">
-        <!-- Download result will be loaded here -->
+<!-- ==================== BASEMAP CONTROL (Bottom Left) ==================== -->
+<div class="basemap-control" id="basemapControl">
+    <div class="basemap-toggle" onclick="toggleBasemapOptions()">
+        <span>🗺️</span>
+        <span>Basemaps</span>
+    </div>
+    <div class="basemap-options" id="basemapOptions">
+        <label class="basemap-option">
+            <input type="radio" name="basemap" value="osm" checked>
+            <img src="https://a.tile.openstreetmap.org/9/238/307.png" alt="Streets">
+            <span>Streets</span>
+        </label>
+        <label class="basemap-option">
+            <input type="radio" name="basemap" value="terrain">
+            <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/9/307/238" alt="Terrain">
+            <span>Terrain</span>
+        </label>
+        <label class="basemap-option">
+            <input type="radio" name="basemap" value="satellite">
+            <img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/9/307/238" alt="Satellite">
+            <span>Satellite</span>
+        </label>
+        <label class="basemap-option">
+            <input type="radio" name="basemap" value="dark">
+            <img src="https://a.basemaps.cartocdn.com/dark_all/9/238/307.png" alt="Dark">
+            <span>Dark</span>
+        </label>
     </div>
 </div>
+
+<!-- ==================== LAYER PANEL (Right Side) ==================== -->
+<div id="layerPanel">
+    <div class="panel-header">
+        <h4>
+            <span>📋</span>
+            <span>Layers</span>
+            <span class="layer-count" id="layerCount"></span>
+        </h4>
+        <div class="panel-controls">
+            <button class="btn-control" onclick="toggleMinimize()" title="Minimize">
+                <span id="minimizeIcon">−</span>
+            </button>
+            <button class="btn-control" onclick="refreshLayers()" title="Refresh">↻</button>
+        </div>
+    </div>
+
+    <div class="panel-content">
+        <!-- Search Box -->
+        <div class="search-box">
+            <input type="text"
+                   id="layerSearch"
+                   class="search-input"
+                   placeholder="Search layers..."
+                   hx-get="{% url 'layer_list' %}"
+                   hx-trigger="keyup changed delay:500ms"
+                   hx-target="#layerList"
+                   hx-swap="innerHTML"
+                   name="search">
+        </div>
+
+        <!-- Filter Buttons -->
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">
+                <span>📋</span> All
+            </button>
+            <button class="filter-btn filter-preferred" data-filter="preferred">
+                <span>⭐</span> Preferred
+            </button>
+            <button class="filter-btn" data-filter="water">
+                <span>💧</span> Water
+            </button>
+            <button class="filter-btn" data-filter="electric">
+                <span>⚡</span> Electric
+            </button>
+            <button class="filter-btn" data-filter="road">
+                <span>🛣️</span> Road
+            </button>
+        </div>
+
+        <!-- Layer List Container -->
+        <div id="layerList"
+             hx-get="{% url 'layer_list' %}"
+             hx-trigger="intersect once"
+             hx-swap="innerHTML">
+            <!-- Initial loading state -->
+            <div class="empty-state">
+                <div class="empty-icon">📋</div>
+                <h3>Loading layers...</h3>
+                <p>Scroll here to load layer list</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== NEARBY SIDEBAR (Left Side) ==================== -->
+<div id="nearbySidebar" class="nearby-sidebar">
+    <div class="sidebar-header">
+        <h5><span>📍</span> Nearby Layers</h5>
+        <button class="btn-close" onclick="MapController.closeNearbySidebar()">×</button>
+    </div>
+    <div id="nearbyContent" class="sidebar-content">
+        <div class="empty-state">
+            <div class="empty-icon">👆</div>
+            <h3>Click on the map</h3>
+            <p>Find layers near any location</p>
+        </div>
+    </div>
+</div>
+
+<!-- Sidebar Overlay (for mobile) -->
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="MapController.closeNearbySidebar()"></div>
+
+<!-- Hidden HTMX form for nearby layers -->
+<form id="mapClickForm"
+      hx-get="{% url 'nearby_layers' %}"
+      hx-target="#nearbyContent"
+      hx-swap="innerHTML"
+      hx-trigger="submit"
+      style="display: none;">
+    <input type="hidden" id="clickLat" name="lat">
+    <input type="hidden" id="clickLng" name="lng">
+</form>
+
+<!-- Export FAB -->
+<button id="exportFab" 
+        class="export-fab" 
+        onclick="MapController.downloadArea()" 
+        title="Download active layers"
+        style="display: none;">
+    <span>💾</span>
+    <span id="activeLayerCount">0</span>
+</button>
 
 {% endblock %}
 
 {% block extrascript %}
-<!-- Map Controller Script -->
+<!-- Map Libraries -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-hash"></script>
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+<script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
+
+<!-- HTMX -->
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+<!-- Map Controller -->
 <script src="{% static 'js/map-controller.js' %}"></script>
 
-<!-- Initialize Map with configuration -->
+<style>
+/* Export FAB styling */
+.export-fab {
+    position: fixed;
+    bottom: 30px;
+    right: 400px;
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, #0d9488, #14b8a6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(13, 148, 136, 0.4);
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    transition: all 0.3s;
+}
+
+.export-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 30px rgba(13, 148, 136, 0.5);
+}
+
+.export-fab span:last-child {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .export-fab {
+        right: 20px;
+        bottom: 100px;
+    }
+}
+</style>
+
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Get configuration from data attributes
-        const mapEl = document.getElementById('map');
-        
-        const config = {
-            exportUrl: mapEl.dataset.exportUrl,
-            layersUrl: mapEl.dataset.layersUrl,
-            nearbyUrl: mapEl.dataset.nearbyUrl,
-            previewUrl: mapEl.dataset.previewUrl,
-            connectsUrl: mapEl.dataset.connectsUrl,
-            csrfToken: mapEl.dataset.csrfToken
-        };
-        
-        // Initialize map controller
-        MapController.init(config);
-        
-        // Listen for HTMX events
-        document.body.addEventListener('htmx:afterSwap', function(evt) {
-            MapController.handleHtmxAfterSwap(evt);
+document.addEventListener('DOMContentLoaded', function() {
+    // CSRF Token setup for HTMX
+    function getCsrfToken() {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'csrftoken') return value;
+        }
+        const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        return csrfInput ? csrfInput.value : '';
+    }
+
+    document.body.addEventListener('htmx:configRequest', function(evt) {
+        evt.detail.headers['X-CSRFToken'] = getCsrfToken();
+    });
+
+    // Initialize MapController
+    MapController.init({
+        csrfToken: '{{ csrf_token }}',
+        previewUrl: '{% url "layer_preview_features" %}',
+        exportUrl: '{% url "export_dxf_multi" %}',
+        nearbyUrl: '{% url "nearby_layers" %}',
+        layerListUrl: '{% url "layer_list" %}'
+    });
+
+    // Basemap radio buttons
+    document.querySelectorAll('input[name="basemap"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            MapController.switchBasemap(e.target.value);
         });
     });
-</script>
 
-<!-- Expose toggleLayer and other functions for onclick handlers in partials -->
-<script>
-    // Bridge functions for onclick handlers in HTMX partials
-    window.toggleLayer = function(layerId, checkbox) {
-        MapController.toggleLayer(layerId, checkbox);
-    };
+    // Filter buttons - use htmx.ajax directly
+    let currentFilter = 'all';
     
-    window.zoomToLayer = function(layerId, lat, lng) {
-        MapController.zoomToLayer(layerId, lat, lng);
-    };
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Update active state
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            // Get filter type
+            currentFilter = this.dataset.filter;
+            const searchValue = document.getElementById('layerSearch').value || '';
+            
+            // Build URL with both search and filter params
+            let url = '{% url "layer_list" %}?filter=' + encodeURIComponent(currentFilter);
+            if (searchValue) {
+                url += '&search=' + encodeURIComponent(searchValue);
+            }
+            
+            // Use htmx.ajax to load filtered results into #layerList
+            htmx.ajax('GET', url, {
+                target: '#layerList',
+                swap: 'innerHTML'
+            });
+        });
+    });
     
-    window.downloadArea = function(layerId, lat, lng) {
-        MapController.downloadArea(layerId, lat, lng);
-    };
-    
-    window.downloadNearbyLayers = function() {
-        MapController.downloadNearbyLayers();
-    };
-    
-    window.updateNearbyCount = function() {
-        MapController.updateNearbyCount();
-    };
+    // Also update search to include current filter
+    const searchInput = document.getElementById('layerSearch');
+    if (searchInput) {
+        searchInput.addEventListener('keyup', function() {
+            // Debounce is handled by HTMX, but we need to include filter
+            const baseUrl = '{% url "layer_list" %}';
+            const searchValue = this.value || '';
+            let url = baseUrl + '?filter=' + encodeURIComponent(currentFilter);
+            if (searchValue) {
+                url += '&search=' + encodeURIComponent(searchValue);
+            }
+            this.setAttribute('hx-get', url);
+        });
+    }
+
+    // Update export FAB count
+    setInterval(() => {
+        const fab = document.getElementById('exportFab');
+        const count = MapController.activeLayers ? MapController.activeLayers.size : 0;
+        if (fab) {
+            fab.style.display = count > 0 ? 'flex' : 'none';
+            document.getElementById('activeLayerCount').textContent = count;
+        }
+    }, 500);
+
+    // Open sidebar after HTMX loads nearby content
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target.id === 'nearbyContent') {
+            MapController.openNearbySidebar();
+        }
+    });
+});
+
+// Basemap toggle
+function toggleBasemapOptions() {
+    const options = document.getElementById('basemapOptions');
+    options.classList.toggle('show');
+}
+
+// Close basemap on outside click
+document.addEventListener('click', function(e) {
+    const control = document.getElementById('basemapControl');
+    if (control && !control.contains(e.target)) {
+        document.getElementById('basemapOptions').classList.remove('show');
+    }
+});
+
+// Panel controls
+function toggleMinimize() {
+    const panel = document.getElementById('layerPanel');
+    const icon = document.getElementById('minimizeIcon');
+    panel.classList.toggle('minimized');
+    icon.textContent = panel.classList.contains('minimized') ? '+' : '−';
+}
+
+function refreshLayers() {
+    htmx.ajax('GET', '{% url "layer_list" %}', {target: '#layerList', swap: 'innerHTML'});
+}
+
+// Store preferred layer IDs
+{% if preferred_layer_ids %}
+window.preferredLayerIds = {{ preferred_layer_ids|safe }};
+{% else %}
+window.preferredLayerIds = [];
+{% endif %}
 </script>
 {% endblock %}

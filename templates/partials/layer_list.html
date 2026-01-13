@@ -1,151 +1,236 @@
-{% load static %}
+{# templates/partials/layer_list.html #}
+{# Layer list partial - loaded via HTMX #}
 
-{% if not layers %}
+{% if not grouped_layers %}
 <div class="empty-state">
-    <div class="empty-icon">📦</div>
-    <h3>No Layers Found</h3>
-    <p>{{ message|default:"No layers available at this time" }}</p>
+    {% if filter_type == 'preferred' %}
+        <div class="empty-icon">⭐</div>
+        <p>No preferred layers yet</p>
+        <small>Click the ☆ star icon on any layer to add it to your preferences</small>
+    {% elif search %}
+        <div class="empty-icon">🔍</div>
+        <p>No layers found for "{{ search }}"</p>
+    {% else %}
+        <div class="empty-icon">📋</div>
+        <p>No layers available</p>
+    {% endif %}
 </div>
 {% else %}
-<div class="layers-container">
-    {% for server, server_layers in grouped_layers.items %}
-    <div class="server-group" x-data="{ expanded: true }">
-        <div class="server-header" @click="expanded = !expanded">
-            <span class="expand-icon" x-text="expanded ? '▼' : '▶'"></span>
-            <span class="server-name">{{ server }}</span>
-            <span class="server-count">({{ server_layers|length }})</span>
+    {% for server_name, layers in grouped_layers.items %}
+    <div class="server-group">
+        <div class="server-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+            <span class="server-toggle">▼</span>
+            <span class="server-name">{{ server_name }}</span>
+            <span class="server-count">({{ layers|length }})</span>
         </div>
         
-        <div class="server-layers" x-show="expanded" x-transition>
-            {% for layer in server_layers %}
-            <div class="layer-item" data-layer-id="{{ layer.layer_id }}">
+        <div class="server-layers">
+            {% for layer in layers %}
+            <div class="layer-item {% if layer.layer_id in preferred_layer_ids %}layer-preferred{% endif %}" 
+                 data-layer-id="{{ layer.layer_id }}"
+                 id="layer-item-{{ layer.layer_id }}">
+                
+                {# ✅ FIX: Removed auto-check for preferred layers #}
                 <input type="checkbox" 
                        id="layer-{{ layer.layer_id }}"
                        class="layer-checkbox"
                        onchange="toggleLayer({{ layer.layer_id }}, this)">
                 
-                <label for="layer-{{ layer.layer_id }}" class="layer-label">
-                    <div class="layer-main">
-                        <span class="layer-icon">
-                            {% if 'water' in layer.name|lower %}💧
-                            {% elif 'sewer' in layer.name|lower %}🚰
-                            {% elif 'electric' in layer.name|lower %}⚡
-                            {% elif 'road' in layer.name|lower %}🛣️
-                            {% elif 'gas' in layer.name|lower %}🔥
-                            {% elif 'telecom' in layer.name|lower %}📡
-                            {% else %}📍{% endif %}
-                        </span>
-                        <span class="layer-name" title="{{ layer.name }}">{{ layer.name|truncatechars:30 }}</span>
-                    </div>
-                    <div class="layer-meta">
-                        <span class="layer-type">{{ layer.type }}</span>
-                        <span class="feature-count" id="layer-status-{{ layer.layer_id }}"></span>
-                        {% if not layer.geometry and not layer.offsetX and not layer.offsetY %}
-                        <span class="no-geometry" title="No location data available">📍❌</span>
+                <div class="layer-info">
+                    <label for="layer-{{ layer.layer_id }}" class="layer-name">
+                        {{ layer.name }}
+                        {% if layer.layer_id in preferred_layer_ids %}
+                        <span class="preferred-badge" title="Preferred layer">⭐</span>
                         {% endif %}
+                    </label>
+                    <div class="layer-meta">
+                        <span class="layer-type type-{{ layer.type }}">
+                            {% if layer.type == 'point' %}📍{% elif layer.type == 'polyline' %}〰️{% else %}⬡{% endif %}
+                            {{ layer.type }}
+                        </span>
                     </div>
-                </label>
+                </div>
                 
                 <div class="layer-actions">
-                    <!-- Enhanced zoom button logic -->
                     {% if layer.geometry %}
-                        {% if layer.geometry.geom_type == 'Point' %}
-                            <button class="btn-zoom" 
-                                    onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.y }}, {{ layer.geometry.x }})"
-                                    title="Zoom to layer location">
-                                🎯
-                            </button>
-                        {% else %}
-                            <button class="btn-zoom" 
-                                    onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.centroid.y }}, {{ layer.geometry.centroid.x }})"
-                                    title="Zoom to layer center">
-                                🎯
-                            </button>
-                        {% endif %}
-                    {% elif layer.offsetX != 0 or layer.offsetY != 0 %}
-                        <!-- Handle offset coordinates -->
-                        <button class="btn-zoom" 
-                                onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.offsetY }}, {{ layer.offsetX }})"
-                                title="Zoom to layer offset location">
-                                🎯
-                        </button>
-                    {% elif layer.server.extent_min_x and layer.server.extent_max_x %}
-                        <!-- Fallback to server extent center -->
-                        <button class="btn-zoom" 
-                                onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.server.extent_min_y|add:layer.server.extent_max_y|floatformat:6 }}, {{ layer.server.extent_min_x|add:layer.server.extent_max_x|floatformat:6 }})"
-                                title="Zoom to server area">
-                                🌍
-                        </button>
-                    {% else %}
-                        <!-- No location data available -->
-                        <button class="btn-zoom disabled" 
-                                title="No location data available"
-                                disabled>
-                                ❓
-                        </button>
+                    <button type="button" 
+                            class="btn-zoom" 
+                            onclick="zoomToLayer({{ layer.layer_id }}, {{ layer.geometry.centroid.y }}, {{ layer.geometry.centroid.x }})"
+                            title="Zoom to layer">
+                        🔍
+                    </button>
                     {% endif %}
                     
-                    <!-- Preview button with HTMX -->
-                    <button class="btn-preview" 
-                            hx-get="{% url 'layer_preview_features' %}"
-                            hx-include="[name='bbox']"
-                            hx-vals='{"layer_id": "{{ layer.layer_id }}"}'
-                            hx-trigger="click"
-                            hx-target="#preview-content"
-                            hx-swap="innerHTML"
-                            hx-indicator=".htmx-indicator"
-                            title="Toggle layer preview"
-                            data-layer-id="{{ layer.layer_id }}">
-                        👁️
-                    </button>
-                    
-                    <!-- Download single layer button -->
-                    <button class="btn-download-single" 
-                            onclick="downloadArea({{ layer.layer_id }}, {{ layer.offsetY|default:'null' }}, {{ layer.offsetX|default:'null' }})"
-                            title="Download this layer">
-                        💾
-                    </button>
+                    {# ✅ FIX: Favorite button with proper HTMX refresh #}
+                    {% if filter_type == 'preferred' %}
+                        {# In preferred view: clicking removes from list #}
+                        <button type="button"
+                                class="btn-favorite is-favorite"
+                                hx-post="{% url 'toggle_layer_favorite' layer.layer_id %}"
+                                hx-target="#layer-item-{{ layer.layer_id }}"
+                                hx-swap="outerHTML swap:0.3s"
+                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                hx-confirm="Remove from preferred layers?"
+                                title="Remove from favorites">
+                            ★
+                        </button>
+                    {% else %}
+                        {# In other views: toggle favorite status #}
+                        <button type="button"
+                                class="btn-favorite {% if layer.layer_id in preferred_layer_ids %}is-favorite{% endif %}"
+                                hx-post="{% url 'toggle_layer_favorite' layer.layer_id %}"
+                                hx-target="#layer-item-{{ layer.layer_id }}"
+                                hx-swap="outerHTML"
+                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                title="{% if layer.layer_id in preferred_layer_ids %}Remove from favorites{% else %}Add to favorites{% endif %}">
+                            {% if layer.layer_id in preferred_layer_ids %}★{% else %}☆{% endif %}
+                        </button>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
         </div>
     </div>
     {% endfor %}
-</div>
+{% endif %}
 
-<!-- Layer status info at bottom -->
-<div class="layer-stats">
-    <small>
-        Total layers: {{ layers|length }} | 
-        <span id="layersWithGeometry">Calculating...</span> with location data |
-        <span id="selectedLayers">0</span> selected
-    </small>
-</div>
-
-<script>
-// Calculate layer statistics
-document.addEventListener('DOMContentLoaded', function() {
-    const layerItems = document.querySelectorAll('.layer-item');
-    let withGeometry = 0;
-    
-    layerItems.forEach(item => {
-        const hasGeometry = !item.querySelector('.no-geometry');
-        if (hasGeometry) withGeometry++;
-    });
-    
-    document.getElementById('layersWithGeometry').textContent = withGeometry;
-});
-
-// Update selected count
-function updateSelectedCount() {
-    const selected = document.querySelectorAll('.layer-checkbox:checked').length;
-    document.getElementById('selectedLayers').textContent = selected;
+<style>
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: rgba(255, 255, 255, 0.7);
 }
 
-// Add event listeners to checkboxes
-document.querySelectorAll('.layer-checkbox').forEach(cb => {
-    cb.addEventListener('change', updateSelectedCount);
-});
-</script>
+.empty-icon { font-size: 48px; margin-bottom: 15px; }
+.empty-state p { margin: 0 0 5px 0; font-size: 16px; color: white; }
+.empty-state small { font-size: 13px; opacity: 0.7; }
 
-{% endif %}
+/* Server Group */
+.server-group { margin-bottom: 15px; }
+
+.server-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 8px;
+}
+
+.server-header:hover { background: rgba(255, 255, 255, 0.15); }
+.server-toggle { font-size: 10px; color: rgba(255, 255, 255, 0.7); width: 12px; }
+.server-name { flex: 1; font-weight: 600; font-size: 13px; color: #222323; text-transform: uppercase; letter-spacing: 0.5px; }
+.server-count { font-size: 12px; color: rgba(255, 255, 255, 0.6); }
+
+.server-layers { display: flex; flex-direction: column; gap: 6px; padding-left: 8px; }
+.server-layers.collapsed { display: none; }
+
+/* Layer Items */
+.layer-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.layer-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.layer-item.layer-active {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* ⭐ PREFERRED LAYER - Gold styling */
+.layer-item.layer-preferred {
+    border-left: 3px solid #fbbf24 !important;
+    background: linear-gradient(90deg, rgba(251, 191, 36, 0.15) 0%, rgba(255, 255, 255, 0.08) 40%);
+}
+
+.layer-item.layer-preferred:hover {
+    background: linear-gradient(90deg, rgba(251, 191, 36, 0.2) 0%, rgba(255, 255, 255, 0.12) 40%);
+}
+
+.layer-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #10b981;
+    flex-shrink: 0;
+}
+
+.layer-info { flex: 1; min-width: 0; }
+
+.layer-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #222323;
+    cursor: pointer;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.preferred-badge { font-size: 12px; color: #fbbf24; flex-shrink: 0; }
+
+.layer-meta { margin-top: 3px; }
+
+.layer-type {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.layer-type.type-point { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+.layer-type.type-polyline { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.layer-type.type-polygon { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+
+.layer-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.btn-zoom,
+.btn-favorite {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.btn-zoom:hover,
+.btn-favorite:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.btn-favorite.is-favorite {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.2);
+}
+
+/* Fade out animation for removed items */
+.layer-item.htmx-swapping {
+    opacity: 0;
+    transform: translateX(-20px);
+}
+</style>

@@ -96,15 +96,16 @@ def all_layers(request):
 
 @login_required
 def home(request):
-    """
-    Main map page - FIXED to pass preferred_layer_ids to template.
-    This enables auto-selection of user's preferred layers on page load.
-    """
-    # Get user's preferred layer IDs
-    preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+
+    favorite_layer_ids = list(
+        UserLayerPreference.objects.filter(
+            user=request.user,
+            is_favorite=True
+        ).values_list('layer_id', flat=True)
+    )
 
     return render(request, "home.html", {
-        'preferred_layer_ids': json.dumps(preferred_layer_ids),
+        'preferred_layer_ids': json.dumps(favorite_layer_ids),
     })
 
 
@@ -120,24 +121,87 @@ def user_connects(request):
 
 @login_required
 @require_GET
+# def layer_list(request):
+#     """
+#     Return filtered layer list with user preferences.
+#     ✅ OPTIMIZED: Caches user preferences and adds pagination.
+#     """
+#     from django.core.paginator import Paginator
+#
+#     search = request.GET.get('search', '').strip()
+#     filter_type = request.GET.get('filter', 'all').lower()
+#     page_num = request.GET.get('page', 1)
+#
+#     # ✅ OPTIMIZATION 1: Cache user preferences
+#     cache_key = f"user_preferred_layers_{request.user.id}"
+#     preferred_layer_ids = cache.get(cache_key)
+#
+#     if preferred_layer_ids is None:
+#         preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+#         cache.set(cache_key, preferred_layer_ids, 300)
+#
+#     # Start with all layers
+#     layers = Layer.objects.select_related('server').all()
+#
+#     # Apply search filter
+#     if search:
+#         layers = layers.filter(name__icontains=search)
+#
+#     # Apply type/category filters
+#     if filter_type == 'preferred':
+#         if preferred_layer_ids:
+#             layers = layers.filter(layer_id__in=preferred_layer_ids)
+#         else:
+#             layers = layers.none()
+#     elif filter_type == 'water':
+#         layers = layers.filter(Q(name__icontains='WAT') | Q(name__icontains='SEW'))
+#     elif filter_type == 'electric':
+#         layers = layers.filter(name__icontains='ELEC')
+#     elif filter_type == 'road':
+#         layers = layers.filter(Q(name__icontains='ROAD') | Q(name__icontains='STREET'))
+#     elif filter_type == 'contour':
+#         layers = layers.filter(name__icontains='CONTOUR')
+#
+#     # ✅ OPTIMIZATION 2: Add pagination (50 layers per page)
+#     paginator = Paginator(layers, 50)
+#     page_obj = paginator.get_page(page_num)
+#
+#     # Group by server (only for current page)
+#     grouped_layers = defaultdict(list)
+#     for layer in page_obj:
+#         server_name = layer.server.name if layer.server else 'Unknown'
+#         grouped_layers[server_name].append(layer)
+#
+#     # Sort servers alphabetically
+#     grouped_layers = dict(sorted(grouped_layers.items()))
+#
+#     return TemplateResponse(request, 'partials/layer_list.html', {
+#         'grouped_layers': grouped_layers,
+#         'preferred_layer_ids': preferred_layer_ids,
+#         'filter_type': filter_type,
+#         'search': search,
+#         'total_count': paginator.count,
+#         'page_obj': page_obj,  # For pagination controls
+#     })
+
+@login_required
+@require_GET
 def layer_list(request):
     """
     Return filtered layer list with user preferences.
-    ✅ OPTIMIZED: Caches user preferences and adds pagination.
+    Supports search, type filter, and 'preferred' filter.
+    FIXED: 'preferred' now shows only is_favorite=True layers.
     """
-    from django.core.paginator import Paginator
-
     search = request.GET.get('search', '').strip()
     filter_type = request.GET.get('filter', 'all').lower()
-    page_num = request.GET.get('page', 1)
 
-    # ✅ OPTIMIZATION 1: Cache user preferences
-    cache_key = f"user_preferred_layers_{request.user.id}"
-    preferred_layer_ids = cache.get(cache_key)
-
-    if preferred_layer_ids is None:
-        preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
-        cache.set(cache_key, preferred_layer_ids, 300)
+    # Get user's FAVORITE layer IDs (only is_favorite=True)
+    favorite_layer_ids = list(
+        UserLayerPreference.objects.filter(
+            user=request.user,
+            is_favorite=True
+        ).values_list('layer_id', flat=True)
+    )
 
     # Start with all layers
     layers = Layer.objects.select_related('server').all()
@@ -148,26 +212,27 @@ def layer_list(request):
 
     # Apply type/category filters
     if filter_type == 'preferred':
-        if preferred_layer_ids:
-            layers = layers.filter(layer_id__in=preferred_layer_ids)
+        # Show only FAVORITE layers (is_favorite=True)
+        if favorite_layer_ids:
+            layers = layers.filter(layer_id__in=favorite_layer_ids)
         else:
             layers = layers.none()
     elif filter_type == 'water':
-        layers = layers.filter(Q(name__icontains='WAT') | Q(name__icontains='SEW'))
+        layers = layers.filter(
+            Q(name__icontains='WAT') | Q(name__icontains='SEW')
+        )
     elif filter_type == 'electric':
         layers = layers.filter(name__icontains='ELEC')
     elif filter_type == 'road':
-        layers = layers.filter(Q(name__icontains='ROAD') | Q(name__icontains='STREET'))
+        layers = layers.filter(
+            Q(name__icontains='ROAD') | Q(name__icontains='STREET')
+        )
     elif filter_type == 'contour':
         layers = layers.filter(name__icontains='CONTOUR')
 
-    # ✅ OPTIMIZATION 2: Add pagination (50 layers per page)
-    paginator = Paginator(layers, 50)
-    page_obj = paginator.get_page(page_num)
-
-    # Group by server (only for current page)
+    # Group by server
     grouped_layers = defaultdict(list)
-    for layer in page_obj:
+    for layer in layers:
         server_name = layer.server.name if layer.server else 'Unknown'
         grouped_layers[server_name].append(layer)
 
@@ -176,16 +241,11 @@ def layer_list(request):
 
     return TemplateResponse(request, 'partials/layer_list.html', {
         'grouped_layers': grouped_layers,
-        'preferred_layer_ids': preferred_layer_ids,
+        'preferred_layer_ids': favorite_layer_ids,  # For star display
         'filter_type': filter_type,
         'search': search,
-        'total_count': paginator.count,
-        'page_obj': page_obj,  # For pagination controls
+        'total_count': layers.count(),
     })
-
-# ==============================================================================
-# 3. REPLACE the log_export_records() function (around line 1310) with this:
-# ==============================================================================
 
 def log_export_records(user, layers, lat, lng):
     """Log download records and update user layer preferences"""
@@ -2590,17 +2650,48 @@ def draw_feature_to_dxf(msp, geom, attributes, layer):
 @login_required
 @require_POST
 def toggle_layer_favorite(request, layer_id):
-    """Toggle favorite status for a layer."""
+    """
+    Toggle favorite status for a specific layer.
+    Returns HTML for HTMX swap or JSON for API calls.
+    """
+    from django.template.response import TemplateResponse
+
+    # Toggle the favorite
     is_favorite = UserLayerPreference.toggle_favorite(request.user, layer_id)
 
-    # ✅ OPTIMIZATION: Invalidate user's preference cache
-    cache_key = f"user_preferred_layers_{request.user.id}"
-    cache.delete(cache_key)
+    # Check if this is an HTMX request
+    is_htmx = request.headers.get('HX-Request') == 'true'
+
+    if is_htmx:
+        # Get the filter type from referer or request
+        filter_type = request.GET.get('filter', 'all')
+        referer = request.headers.get('Referer', '')
+        if 'filter=preferred' in referer:
+            filter_type = 'preferred'
+
+        # If we're in preferred view and just un-favorited, return empty (removes from list)
+        if filter_type == 'preferred' and not is_favorite:
+            return HttpResponse('')  # Empty response removes the element
+
+        # Otherwise return the updated layer item
+        try:
+            layer = Layer.objects.select_related('server').get(layer_id=layer_id)
+            preferred_layer_ids = UserLayerPreference.get_preferred_layer_ids(request.user)
+
+            # Return just the layer item HTML
+            return TemplateResponse(request, 'partials/layer_item.html', {
+                'layer': layer,
+                'preferred_layer_ids': preferred_layer_ids,
+                'filter_type': filter_type,
+            })
+        except Layer.DoesNotExist:
+            return HttpResponse('')
+
 
     return JsonResponse({
         'success': True,
         'layer_id': layer_id,
-        'is_favorite': is_favorite
+        'is_favorite': is_favorite,
     })
 
 

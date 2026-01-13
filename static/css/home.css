@@ -424,7 +424,7 @@ body {
 .layer-actions button {
     padding: 8px 10px;
     border: 1px solid var(--border-color);
-    background: white;
+    background: #14b8a6;
     border-radius: 8px;
     cursor: pointer;
     font-size: 14px;

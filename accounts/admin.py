@@ -7,3 +7,4 @@ admin.site.unregister(Group)
 admin.site.unregister(EmailAddress)
 # Register your models here.
 admin.site.register(User)
+

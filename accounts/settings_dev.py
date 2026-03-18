@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'connects',
     'django_htmx',
-    'django_celery_beat',
 
 ]
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
@@ -161,7 +160,6 @@ LOGOUT_REDIRECT_URL = "/"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 #
-
 # GDAL_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\gdal304.dll'
 # GEOS_LIBRARY_PATH = r'C:\Users\junaid iqbal\PycharmProjects\EcommerceMap\.venv\Lib\site-packages\osgeo\geos_c.dll'
 
@@ -171,18 +169,10 @@ STRIPE_SUCCESS_URL = os.getenv('STRIPE_SUCCESS_URL')
 STRIPE_CANCEL_URL = os.getenv('STRIPE_CANCEL_URL')
 STRIPE_BILLING_PORTAL = os.getenv('STRIPE_BILLING_PORTAL')
 
+
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': 'redis://127.0.0.1:6379/1',
     }
 }
-
-ELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-#
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.environ.get("CELERY_BROKER", "redis://localhost:6379/0")
-
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
